@@ -25,14 +25,14 @@ jobs:
             "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}")
 
           TOKEN=$(printf '%s' "$SIGNUP" | jq -r '.idToken // empty')
-          UID=$(printf '%s' "$SIGNUP" | jq -r '.localId // empty')
-          test -n "$TOKEN" && test -n "$UID"
+          USER_ID=$(printf '%s' "$SIGNUP" | jq -r '.localId // empty')
+          test -n "$TOKEN" && test -n "$USER_ID"
           echo "Firebase Auth signup: OK"
 
           cleanup() {
             curl -sS -X DELETE \
               -H "Authorization: Bearer ${TOKEN}" \
-              "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}?key=${API_KEY}" >/dev/null || true
+              "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${USER_ID}?key=${API_KEY}" >/dev/null || true
             curl -sS -X POST \
               -H 'Content-Type: application/json' \
               -d "{\"idToken\":\"${TOKEN}\"}" \
@@ -41,20 +41,20 @@ jobs:
           trap cleanup EXIT
 
           BODY=$(jq -n \
-            --arg uid "$UID" --arg email "$EMAIL" \
+            --arg uid "$USER_ID" --arg email "$EMAIL" \
             '{fields:{uid:{stringValue:$uid},name:{stringValue:"MotoVerse Smoke Test"},email:{stringValue:$email},admin:{booleanValue:false},verified:{booleanValue:false}}}')
 
           HTTP=$(curl -sS -o /tmp/write.json -w '%{http_code}' -X PATCH \
             -H "Authorization: Bearer ${TOKEN}" \
             -H 'Content-Type: application/json' \
             -d "$BODY" \
-            "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}?key=${API_KEY}")
+            "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${USER_ID}?key=${API_KEY}")
           test "$HTTP" = "200"
           echo "Firestore authenticated write: OK"
 
           HTTP=$(curl -sS -o /tmp/read.json -w '%{http_code}' \
             -H "Authorization: Bearer ${TOKEN}" \
-            "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}?key=${API_KEY}")
+            "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${USER_ID}?key=${API_KEY}")
           test "$HTTP" = "200"
           echo "Firestore authenticated read: OK"
 
