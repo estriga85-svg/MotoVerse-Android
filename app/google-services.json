@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "408116968075",
+    "project_id": "motoverse-3d58d",
+    "storage_bucket": "motoverse-3d58d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:408116968075:android:8e78f859c5366f94c9b28e",
+        "android_client_info": {
+          "package_name": "pt.motoverse.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "408116968075-n6qu13qhlrpivir0um0im12cnoguqpad.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "pt.motoverse.app",
+            "certificate_hash": "d58256422387d05ab024c1d14d0f0b439dd75f07"
+          }
+        },
+        {
+          "client_id": "408116968075-k0rgclqohlfhq4661p93ndohs8lrq6jd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfUTqMw9DeW3tJ6thp3RKnfNqSD8k6ERw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "408116968075-k0rgclqohlfhq4661p93ndohs8lrq6jd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
