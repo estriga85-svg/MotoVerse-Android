@@ -1,0 +1,61 @@
+name: Firebase Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/firebase-smoke-test.yml'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test email auth and Firestore rules
+        env:
+          API_KEY: AIzaSyAfUTqMw9DeW3tJ6thp3RKnfNqSD8k6ERw
+          PROJECT_ID: motoverse-3d58d
+        run: |
+          set -euo pipefail
+          EMAIL="motoverse-smoke-${GITHUB_RUN_ID}@example.com"
+          PASS="MvSmoke-${GITHUB_RUN_ID}-X9!"
+
+          SIGNUP=$(curl -fsS -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASS}\",\"returnSecureToken\":true}" \
+            "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${API_KEY}")
+
+          TOKEN=$(printf '%s' "$SIGNUP" | jq -r '.idToken // empty')
+          UID=$(printf '%s' "$SIGNUP" | jq -r '.localId // empty')
+          test -n "$TOKEN" && test -n "$UID"
+          echo "Firebase Auth signup: OK"
+
+          cleanup() {
+            curl -sS -X DELETE \
+              -H "Authorization: Bearer ${TOKEN}" \
+              "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}?key=${API_KEY}" >/dev/null || true
+            curl -sS -X POST \
+              -H 'Content-Type: application/json' \
+              -d "{\"idToken\":\"${TOKEN}\"}" \
+              "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=${API_KEY}" >/dev/null || true
+          }
+          trap cleanup EXIT
+
+          BODY=$(jq -n \
+            --arg uid "$UID" --arg email "$EMAIL" \
+            '{fields:{uid:{stringValue:$uid},name:{stringValue:"MotoVerse Smoke Test"},email:{stringValue:$email},admin:{booleanValue:false},verified:{booleanValue:false}}}')
+
+          HTTP=$(curl -sS -o /tmp/write.json -w '%{http_code}' -X PATCH \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -d "$BODY" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}?key=${API_KEY}")
+          test "$HTTP" = "200"
+          echo "Firestore authenticated write: OK"
+
+          HTTP=$(curl -sS -o /tmp/read.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${TOKEN}" \
+            "https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users/${UID}?key=${API_KEY}")
+          test "$HTTP" = "200"
+          echo "Firestore authenticated read: OK"
+
+          echo "Firebase smoke test: PASS"
