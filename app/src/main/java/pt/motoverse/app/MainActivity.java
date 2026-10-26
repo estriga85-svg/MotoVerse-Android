@@ -1,12 +1,9 @@
 package pt.motoverse.app;
 
-import static com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.CancellationSignal;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -15,22 +12,10 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import androidx.credentials.Credential;
-import androidx.credentials.CredentialManager;
-import androidx.credentials.CredentialManagerCallback;
-import androidx.credentials.CustomCredential;
-import androidx.credentials.GetCredentialRequest;
-import androidx.credentials.GetCredentialResponse;
-import androidx.credentials.exceptions.GetCredentialException;
-
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption;
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential;
 import com.google.firebase.Timestamp;
-import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.auth.GoogleAuthProvider;
 import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
@@ -41,13 +26,13 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
 
@@ -58,7 +43,6 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private FirebaseAuth auth;
     private FirebaseFirestore db;
-    private CredentialManager credentialManager;
     private boolean pageReady = false;
 
     @Override
@@ -67,7 +51,6 @@ public class MainActivity extends Activity {
 
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
-        credentialManager = CredentialManager.create(this);
 
         webView = new WebView(this);
         setContentView(webView);
@@ -142,15 +125,12 @@ public class MainActivity extends Activity {
     }
 
     private void loadFirebaseBridge() {
-        try (InputStream in = getAssets().open("firebase-bridge.js")) {
-            byte[] bytes = new byte[in.available()];
-            int offset = 0;
-            while (offset < bytes.length) {
-                int read = in.read(bytes, offset, bytes.length - offset);
-                if (read < 0) break;
-                offset += read;
-            }
-            String js = new String(bytes, 0, offset, StandardCharsets.UTF_8);
+        try (InputStream in = getAssets().open("firebase-bridge.js");
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int n;
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+            String js = out.toString(StandardCharsets.UTF_8.name());
             webView.evaluateJavascript(js, value -> {
                 pageReady = true;
                 pushAuthStateToWeb();
@@ -194,7 +174,8 @@ public class MainActivity extends Activity {
         data.put("admin", isAdmin(user));
         data.put("verified", isAdmin(user));
         data.put("lastLoginAt", FieldValue.serverTimestamp());
-        db.collection("users").document(user.getUid()).set(data);
+        db.collection("users").document(user.getUid()).set(data)
+                .addOnFailureListener(e -> sendError("Sessão iniciada, mas não foi possível sincronizar o perfil."));
     }
 
     private void runJs(String js) {
@@ -239,6 +220,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (!validEmailPassword(email, password)) return;
+
         auth.createUserWithEmailAndPassword(email.trim(), password).addOnCompleteListener(this, task -> {
             if (!task.isSuccessful()) {
                 sendError(friendlyAuthError(task.getException()));
@@ -249,8 +231,10 @@ public class MainActivity extends Activity {
                 sendError("A conta foi criada, mas não foi possível abrir a sessão.");
                 return;
             }
-            UserProfileChangeRequest req = new UserProfileChangeRequest.Builder().setDisplayName(name.trim()).build();
-            user.updateProfile(req).addOnCompleteListener(profileTask -> {
+            UserProfileChangeRequest request = new UserProfileChangeRequest.Builder()
+                    .setDisplayName(name.trim())
+                    .build();
+            user.updateProfile(request).addOnCompleteListener(profileTask -> {
                 pushAuthStateToWeb();
                 runJs("window.onAuthSuccess && window.onAuthSuccess('Conta criada com sucesso');");
             });
@@ -263,39 +247,10 @@ public class MainActivity extends Activity {
             if (task.isSuccessful()) {
                 pushAuthStateToWeb();
                 runJs("window.onAuthSuccess && window.onAuthSuccess('Sessão iniciada');");
-            } else sendError(friendlyAuthError(task.getException()));
+            } else {
+                sendError(friendlyAuthError(task.getException()));
+            }
         });
-    }
-
-    private void startGoogleSignIn(boolean authorizedOnly) {
-        GetGoogleIdOption option = new GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(authorizedOnly)
-                .setServerClientId(getString(R.string.default_web_client_id))
-                .build();
-        GetCredentialRequest request = new GetCredentialRequest.Builder().addCredentialOption(option).build();
-        credentialManager.getCredentialAsync(this, request, new CancellationSignal(), Executors.newSingleThreadExecutor(),
-                new CredentialManagerCallback<GetCredentialResponse, GetCredentialException>() {
-                    @Override public void onResult(GetCredentialResponse result) { handleGoogleCredential(result.getCredential()); }
-                    @Override public void onError(GetCredentialException e) {
-                        if (authorizedOnly) startGoogleSignIn(false);
-                        else sendError("O login Google precisa de uma assinatura Android fixa antes de ser ativado nesta build.");
-                    }
-                });
-    }
-
-    private void handleGoogleCredential(Credential credential) {
-        if (credential instanceof CustomCredential && TYPE_GOOGLE_ID_TOKEN_CREDENTIAL.equals(credential.getType())) {
-            try {
-                GoogleIdTokenCredential google = GoogleIdTokenCredential.createFrom(((CustomCredential) credential).getData());
-                AuthCredential firebaseCredential = GoogleAuthProvider.getCredential(google.getIdToken(), null);
-                auth.signInWithCredential(firebaseCredential).addOnCompleteListener(this, task -> {
-                    if (task.isSuccessful()) {
-                        pushAuthStateToWeb();
-                        runJs("window.onAuthSuccess && window.onAuthSuccess('Sessão Google iniciada');");
-                    } else sendError(friendlyAuthError(task.getException()));
-                });
-            } catch (Exception e) { sendError("Credencial Google inválida."); }
-        } else sendError("A conta Google não devolveu uma credencial válida.");
     }
 
     private Map<String, Object> jsonToMap(JSONObject o) throws JSONException {
@@ -310,8 +265,11 @@ public class MainActivity extends Activity {
                 List<Object> list = new ArrayList<>();
                 for (int j = 0; j < a.length(); j++) list.add(a.get(j));
                 map.put(key, list);
-            } else if (value == JSONObject.NULL) map.put(key, null);
-            else map.put(key, value);
+            } else if (value == JSONObject.NULL) {
+                map.put(key, null);
+            } else {
+                map.put(key, value);
+            }
         }
         return map;
     }
@@ -333,26 +291,39 @@ public class MainActivity extends Activity {
     }
 
     public class MotoVerseBridge {
-        @JavascriptInterface public void refreshAuth() { pushAuthStateToWeb(); }
-
-        @JavascriptInterface public void createAccount(String name, String email, String password) {
-            runOnUiThread(() -> MainActivity.this.createEmailAccount(name, email, password));
+        @JavascriptInterface
+        public void refreshAuth() {
+            pushAuthStateToWeb();
         }
 
-        @JavascriptInterface public void signInEmail(String email, String password) {
-            runOnUiThread(() -> MainActivity.this.signInEmailAccount(email, password));
+        @JavascriptInterface
+        public void createAccount(String name, String email, String password) {
+            runOnUiThread(() -> createEmailAccount(name, email, password));
         }
 
-        @JavascriptInterface public void googleLogin() { runOnUiThread(() -> startGoogleSignIn(true)); }
+        @JavascriptInterface
+        public void signInEmail(String email, String password) {
+            runOnUiThread(() -> signInEmailAccount(email, password));
+        }
 
-        @JavascriptInterface public void logout() {
+        @JavascriptInterface
+        public void googleLogin() {
+            sendError("Login Google fica disponível numa próxima build. Usa e-mail e palavra-passe nesta versão.");
+        }
+
+        @JavascriptInterface
+        public void logout() {
             auth.signOut();
             pushAuthStateToWeb();
         }
 
-        @JavascriptInterface public void saveListing(String json) {
+        @JavascriptInterface
+        public void saveListing(String json) {
             FirebaseUser user = auth.getCurrentUser();
-            if (user == null) { sendError("Inicia sessão antes de publicar um anúncio."); return; }
+            if (user == null) {
+                sendError("Inicia sessão antes de publicar um anúncio.");
+                return;
+            }
             try {
                 Map<String, Object> data = jsonToMap(new JSONObject(json));
                 data.put("ownerUid", user.getUid());
@@ -361,53 +332,74 @@ public class MainActivity extends Activity {
                 data.put("status", "pending");
                 data.put("createdAt", FieldValue.serverTimestamp());
                 data.put("updatedAt", FieldValue.serverTimestamp());
+
                 db.collection("listings").add(data)
                         .addOnSuccessListener(ref -> runJs("window.onListingSaved && window.onListingSaved(" + JSONObject.quote(ref.getId()) + ");"))
                         .addOnFailureListener(e -> sendError("Não foi possível guardar o anúncio: " + e.getLocalizedMessage()));
-            } catch (Exception e) { sendError("Dados do anúncio inválidos."); }
+            } catch (Exception e) {
+                sendError("Dados do anúncio inválidos.");
+            }
         }
 
-        @JavascriptInterface public void loadMyListings() {
+        @JavascriptInterface
+        public void loadMyListings() {
             FirebaseUser user = auth.getCurrentUser();
             if (user == null) return;
             db.collection("listings").whereEqualTo("ownerUid", user.getUid()).get()
-                    .addOnSuccessListener(snap -> {
+                    .addOnSuccessListener(snapshot -> {
                         JSONArray arr = new JSONArray();
-                        for (QueryDocumentSnapshot d : snap) arr.put(documentJson(d));
+                        for (QueryDocumentSnapshot d : snapshot) arr.put(documentJson(d));
                         runJs("window.onMyListings && window.onMyListings(" + arr.toString() + ");");
-                    }).addOnFailureListener(e -> sendError("Não foi possível carregar os teus anúncios."));
+                    })
+                    .addOnFailureListener(e -> sendError("Não foi possível carregar os teus anúncios."));
         }
 
-        @JavascriptInterface public void loadApprovedListings() {
+        @JavascriptInterface
+        public void loadApprovedListings() {
             if (auth.getCurrentUser() == null) return;
             db.collection("listings").whereEqualTo("status", "approved").get()
-                    .addOnSuccessListener(snap -> {
+                    .addOnSuccessListener(snapshot -> {
                         JSONArray arr = new JSONArray();
-                        for (QueryDocumentSnapshot d : snap) arr.put(documentJson(d));
+                        for (QueryDocumentSnapshot d : snapshot) arr.put(documentJson(d));
                         runJs("window.onApprovedListings && window.onApprovedListings(" + arr.toString() + ");");
-                    }).addOnFailureListener(e -> sendError("Não foi possível carregar os anúncios publicados."));
+                    })
+                    .addOnFailureListener(e -> sendError("Não foi possível carregar os anúncios publicados."));
         }
 
-        @JavascriptInterface public void loadPendingListingsAdmin() {
+        @JavascriptInterface
+        public void loadPendingListingsAdmin() {
             FirebaseUser user = auth.getCurrentUser();
-            if (!isAdmin(user)) { sendError("Área reservada ao revisor."); return; }
+            if (!isAdmin(user)) {
+                sendError("Área reservada ao revisor.");
+                return;
+            }
             db.collection("listings").whereEqualTo("status", "pending").get()
-                    .addOnSuccessListener(snap -> {
+                    .addOnSuccessListener(snapshot -> {
                         JSONArray arr = new JSONArray();
-                        for (QueryDocumentSnapshot d : snap) arr.put(documentJson(d));
+                        for (QueryDocumentSnapshot d : snapshot) arr.put(documentJson(d));
                         runJs("window.onPendingListings && window.onPendingListings(" + arr.toString() + ");");
-                    }).addOnFailureListener(e -> sendError("Não foi possível carregar os anúncios em revisão."));
+                    })
+                    .addOnFailureListener(e -> sendError("Não foi possível carregar os anúncios em revisão."));
         }
 
-        @JavascriptInterface public void reviewListing(String id, String status) {
+        @JavascriptInterface
+        public void reviewListing(String id, String status) {
             FirebaseUser user = auth.getCurrentUser();
-            if (!isAdmin(user)) { sendError("Apenas o revisor pode aprovar anúncios."); return; }
-            if (!("approved".equals(status) || "rejected".equals(status))) { sendError("Estado inválido."); return; }
+            if (!isAdmin(user)) {
+                sendError("Apenas o revisor pode aprovar anúncios.");
+                return;
+            }
+            if (!("approved".equals(status) || "rejected".equals(status))) {
+                sendError("Estado inválido.");
+                return;
+            }
+
             Map<String, Object> updates = new HashMap<>();
             updates.put("status", status);
             updates.put("reviewedAt", FieldValue.serverTimestamp());
             updates.put("reviewedBy", user.getEmail());
             updates.put("updatedAt", FieldValue.serverTimestamp());
+
             db.collection("listings").document(id).update(updates)
                     .addOnSuccessListener(v -> runJs("window.onReviewDone && window.onReviewDone();"))
                     .addOnFailureListener(e -> sendError("Não foi possível atualizar o anúncio."));
@@ -418,14 +410,18 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != FILE_CHOOSER_REQUEST || fileCallback == null) return;
+
         Uri[] results = null;
         if (resultCode == Activity.RESULT_OK && data != null) {
             if (data.getClipData() != null) {
                 int count = data.getClipData().getItemCount();
                 results = new Uri[count];
                 for (int i = 0; i < count; i++) results[i] = data.getClipData().getItemAt(i).getUri();
-            } else if (data.getData() != null) results = new Uri[]{data.getData()};
+            } else if (data.getData() != null) {
+                results = new Uri[]{data.getData()};
+            }
         }
+
         fileCallback.onReceiveValue(results);
         fileCallback = null;
     }
