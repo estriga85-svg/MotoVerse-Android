@@ -137,7 +137,7 @@ public class MainActivity extends Activity {
             });
         } catch (Exception e) {
             pageReady = true;
-            sendError("Não foi possível carregar a ligação Firebase.");
+            sendError("Não foi possível carregar a ligação à conta.");
         }
     }
 
@@ -193,9 +193,11 @@ public class MainActivity extends Activity {
         if (e instanceof FirebaseAuthException) {
             String code = ((FirebaseAuthException) e).getErrorCode();
             if ("ERROR_WRONG_PASSWORD".equals(code) || "ERROR_INVALID_CREDENTIAL".equals(code)) return "E-mail ou palavra-passe incorretos.";
+            if ("ERROR_USER_NOT_FOUND".equals(code)) return "Não existe nenhuma conta com este e-mail.";
+            if ("ERROR_USER_DISABLED".equals(code)) return "Esta conta está desativada.";
             if ("ERROR_WEAK_PASSWORD".equals(code)) return "A palavra-passe deve ter pelo menos 6 caracteres.";
             if ("ERROR_INVALID_EMAIL".equals(code)) return "O endereço de e-mail não é válido.";
-            if ("ERROR_EMAIL_ALREADY_IN_USE".equals(code)) return "Já existe uma conta com este e-mail. Usa o botão Entrar.";
+            if ("ERROR_EMAIL_ALREADY_IN_USE".equals(code)) return "Já existe uma conta com este e-mail. Entra na tua conta.";
             if ("ERROR_NETWORK_REQUEST_FAILED".equals(code)) return "Sem ligação à Internet. Tenta novamente.";
             if ("ERROR_TOO_MANY_REQUESTS".equals(code)) return "Demasiadas tentativas. Tenta novamente mais tarde.";
         }
@@ -247,6 +249,20 @@ public class MainActivity extends Activity {
             if (task.isSuccessful()) {
                 pushAuthStateToWeb();
                 runJs("window.onAuthSuccess && window.onAuthSuccess('Sessão iniciada');");
+            } else {
+                sendError(friendlyAuthError(task.getException()));
+            }
+        });
+    }
+
+    private void resetPassword(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            sendError("Indica primeiro o e-mail da tua conta.");
+            return;
+        }
+        auth.sendPasswordResetEmail(email.trim()).addOnCompleteListener(this, task -> {
+            if (task.isSuccessful()) {
+                runJs("window.onPasswordResetSent && window.onPasswordResetSent();");
             } else {
                 sendError(friendlyAuthError(task.getException()));
             }
@@ -307,8 +323,13 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void resetPassword(String email) {
+            runOnUiThread(() -> MainActivity.this.resetPassword(email));
+        }
+
+        @JavascriptInterface
         public void googleLogin() {
-            sendError("Login Google fica disponível numa próxima build. Usa e-mail e palavra-passe nesta versão.");
+            sendError("Login Google fica disponível numa próxima versão.");
         }
 
         @JavascriptInterface
