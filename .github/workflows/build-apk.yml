@@ -29,12 +29,17 @@ jobs:
       - name: Apply v1.8 native patch
         run: python3 app/src/main/patch-v18.py
 
+      - name: Apply v1.9 native patch
+        run: python3 app/src/main/patch-v19.py
+
       - name: Apply runtime fixes
         run: |
           printf '\n' >> app/src/main/assets/firebase-bridge.js
           cat app/src/main/assets/fixes-v17.js >> app/src/main/assets/firebase-bridge.js
           printf '\n' >> app/src/main/assets/firebase-bridge.js
           cat app/src/main/assets/fixes-v18.js >> app/src/main/assets/firebase-bridge.js
+          printf '\n' >> app/src/main/assets/firebase-bridge.js
+          cat app/src/main/assets/fixes-v19.js >> app/src/main/assets/firebase-bridge.js
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -59,6 +64,6 @@ jobs:
       - name: Upload MotoVerse APK
         uses: actions/upload-artifact@v4
         with:
-          name: MotoVerse-APK-v1.8
+          name: MotoVerse-APK-v1.9
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
