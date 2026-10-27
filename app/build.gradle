@@ -11,8 +11,8 @@ android {
         applicationId 'pt.motoverse.app'
         minSdk 24
         targetSdk 35
-        versionCode 5
-        versionName '1.4.0'
+        versionCode 6
+        versionName '1.5.0'
     }
 
     compileOptions {
@@ -25,4 +25,5 @@ dependencies {
     implementation platform('com.google.firebase:firebase-bom:35.1.0')
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-firestore'
+    implementation 'com.google.android.gms:play-services-auth:21.2.0'
 }
