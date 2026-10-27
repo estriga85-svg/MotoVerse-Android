@@ -19,20 +19,8 @@ jobs:
           mkdir -p app/src/main/assets app/src/main/res/drawable-nodpi
           base64 -d app/src/main/motoverse_logo.b64 > app/src/main/assets/motoverse_logo.webp
           cp app/src/main/assets/motoverse_logo.webp app/src/main/res/drawable-nodpi/motoverse_logo.webp
-          python3 -m pip install --quiet pillow
-          python3 - <<'PY'
-          from PIL import Image, ImageOps, ImageDraw
-          src=Image.open('app/src/main/assets/motoverse_logo.webp').convert('RGB')
-          crop=src.crop((210,80,1325,865))
-          canvas=Image.new('RGB',(1024,1024),(8,10,12))
-          fit=ImageOps.contain(crop,(900,760),Image.Resampling.LANCZOS)
-          canvas.paste(fit,((1024-fit.width)//2,115))
-          draw=ImageDraw.Draw(canvas)
-          for i,c in enumerate([(135,48,7),(154,54,8),(171,60,9)]):
-              inset=22+i*7
-              draw.rounded_rectangle([inset,inset,1024-inset,1024-inset],radius=170,outline=c,width=3)
-          canvas.save('app/src/main/res/drawable-nodpi/motoverse_icon.webp','WEBP',quality=92,method=6)
-          PY
+          cp app/src/main/assets/motoverse_logo.webp app/src/main/res/drawable-nodpi/motoverse_icon.webp
+          file app/src/main/assets/motoverse_logo.webp
 
       - name: Prepare fixed debug signing key
         run: |
