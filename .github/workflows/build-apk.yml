@@ -32,6 +32,8 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build Debug APK
+        env:
+          MV_ALERT_WEBHOOK_URL: ${{ secrets.MV_ALERT_WEBHOOK_URL }}
         run: gradle assembleDebug
 
       - name: Upload MotoVerse APK
