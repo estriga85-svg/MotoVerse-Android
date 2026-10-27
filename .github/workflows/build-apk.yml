@@ -17,10 +17,16 @@ jobs:
       - name: Prepare exact MotoVerse branding
         run: |
           mkdir -p app/src/main/assets app/src/main/res/drawable-nodpi
-          base64 -d app/src/main/motoverse_logo.b64 > app/src/main/assets/motoverse_logo.webp
-          cp app/src/main/assets/motoverse_logo.webp app/src/main/res/drawable-nodpi/motoverse_logo.webp
-          cp app/src/main/assets/motoverse_logo.webp app/src/main/res/drawable-nodpi/motoverse_icon.webp
-          file app/src/main/assets/motoverse_logo.webp
+          cat app/src/main/logo_parts/part0.b64 app/src/main/logo_parts/part1.b64 app/src/main/logo_parts/part2.b64 app/src/main/logo_parts/part3.b64 | base64 -d > app/src/main/assets/motoverse_logo.jpg
+          cp app/src/main/assets/motoverse_logo.jpg app/src/main/res/drawable-nodpi/motoverse_icon.jpg
+          file app/src/main/assets/motoverse_logo.jpg
+          python3 - <<'PY'
+          from PIL import Image
+          im=Image.open('app/src/main/assets/motoverse_logo.jpg')
+          im.verify()
+          print('MotoVerse logo verified')
+          PY
+          sed -i 's/motoverse_logo\.webp/motoverse_logo.jpg/g' app/src/main/assets/firebase-bridge.js
 
       - name: Prepare fixed debug signing key
         run: |
