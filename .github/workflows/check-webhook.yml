@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: Check web app response
         run: |
+          echo 'Checking public accessibility'
           curl -L -sS -D /tmp/headers.txt -o /tmp/body.txt --max-time 20 'https://script.google.com/macros/s/AKfycbwG2w3n9i3YLN8Y-QArZ949Ca6y1D2PTjXO4PoMGWAWoP6A8aL9RtuwGf3hlCVcL9dATQ/exec' || true
           echo '--- HEADERS ---'
           tail -n 30 /tmp/headers.txt || true
