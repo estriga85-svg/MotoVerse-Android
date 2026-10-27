@@ -14,6 +14,12 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
+      - name: Prepare exact MotoVerse logo
+        run: |
+          mkdir -p app/src/main/assets app/src/main/res/drawable-nodpi
+          base64 -d app/src/main/motoverse_logo.b64 > app/src/main/assets/motoverse_logo.webp
+          cp app/src/main/assets/motoverse_logo.webp app/src/main/res/drawable-nodpi/motoverse_logo.webp
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
