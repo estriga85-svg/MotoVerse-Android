@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email == 'estriga85@gmail.com';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /garages/{userId} {
+      allow read, create, update, delete: if isOwner(userId) || isAdmin();
+    }
+
+    match /listings/{listingId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      allow read: if resource.data.status == 'approved'
+        || (signedIn() && (
+          resource.data.ownerUid == request.auth.uid
+          || isAdmin()
+        ));
+
+      allow update: if isAdmin() || (
+        signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.status == resource.data.status
+      );
+
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    match /conversations/{conversationId} {
+      allow create, read, update: if signedIn() && (
+        request.auth.uid == request.resource.data.buyerUid
+        || request.auth.uid == request.resource.data.sellerUid
+        || isAdmin()
+      );
+
+      match /messages/{messageId} {
+        allow create, read: if signedIn();
+      }
+    }
+  }
+}
