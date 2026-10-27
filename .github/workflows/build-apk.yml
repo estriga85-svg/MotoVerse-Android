@@ -14,11 +14,34 @@ jobs:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Prepare exact MotoVerse logo
+      - name: Prepare exact MotoVerse branding
         run: |
           mkdir -p app/src/main/assets app/src/main/res/drawable-nodpi
           base64 -d app/src/main/motoverse_logo.b64 > app/src/main/assets/motoverse_logo.webp
           cp app/src/main/assets/motoverse_logo.webp app/src/main/res/drawable-nodpi/motoverse_logo.webp
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageOps, ImageDraw
+          src=Image.open('app/src/main/assets/motoverse_logo.webp').convert('RGB')
+          crop=src.crop((210,80,1325,865))
+          canvas=Image.new('RGB',(1024,1024),(8,10,12))
+          fit=ImageOps.contain(crop,(900,760),Image.Resampling.LANCZOS)
+          canvas.paste(fit,((1024-fit.width)//2,115))
+          draw=ImageDraw.Draw(canvas)
+          for i,c in enumerate([(135,48,7),(154,54,8),(171,60,9)]):
+              inset=22+i*7
+              draw.rounded_rectangle([inset,inset,1024-inset,1024-inset],radius=170,outline=c,width=3)
+          canvas.save('app/src/main/res/drawable-nodpi/motoverse_icon.webp','WEBP',quality=92,method=6)
+          PY
+
+      - name: Prepare fixed debug signing key
+        run: |
+          base64 -d app/src/main/motoverse_debug_keystore.b64 > app/motoverse-debug.keystore
+
+      - name: Apply runtime fixes
+        run: |
+          printf '\n' >> app/src/main/assets/firebase-bridge.js
+          cat app/src/main/assets/fixes-v17.js >> app/src/main/assets/firebase-bridge.js
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -35,6 +58,10 @@ jobs:
         env:
           MV_ALERT_WEBHOOK_URL: ${{ secrets.MV_ALERT_WEBHOOK_URL }}
         run: gradle assembleDebug
+
+      - name: Verify signing certificate
+        run: |
+          $ANDROID_HOME/build-tools/35.0.0/apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload MotoVerse APK
         uses: actions/upload-artifact@v4
