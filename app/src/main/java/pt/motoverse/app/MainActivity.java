@@ -1,7 +1,9 @@
 package pt.motoverse.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
@@ -14,6 +16,14 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
+import androidx.work.Constraints;
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.ExistingWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -48,10 +58,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final int GOOGLE_SIGN_IN_REQUEST = 1002;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 1003;
     private static final String ADMIN_EMAIL = "estriga85@gmail.com";
 
     private WebView webView;
@@ -60,9 +72,11 @@ public class MainActivity extends Activity {
     private FirebaseFirestore db;
     private GoogleSignInClient googleClient;
     private boolean pageReady = false;
+    private boolean openAdminReviewOnReady = false;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        openAdminReviewOnReady = getIntent()!=null && getIntent().getBooleanExtra("openAdminReview", false);
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -117,7 +131,19 @@ public class MainActivity extends Activity {
     private void sendError(String m){JSONObject o=new JSONObject();try{o.put("message",m==null?"Erro inesperado":m);}catch(Exception ignored){}runJs("window.onNativeError&&window.onNativeError("+o+");");}
 
     private boolean isAdmin(FirebaseUser u){return u!=null&&u.getEmail()!=null&&ADMIN_EMAIL.equalsIgnoreCase(u.getEmail());}
-    private void pushAuthStateToWeb(){FirebaseUser u=auth.getCurrentUser();JSONObject o=new JSONObject();try{if(u!=null){o.put("uid",u.getUid());o.put("name",u.getDisplayName()==null?"Motociclista":u.getDisplayName());o.put("email",u.getEmail()==null?"":u.getEmail());o.put("admin",isAdmin(u));o.put("verified",isAdmin(u)||u.isEmailVerified());}}catch(Exception ignored){}runJs("window.onNativeAuth&&window.onNativeAuth("+(u==null?"null":o.toString())+");");if(u!=null){saveUserProfile(u);loadGarageForUser(u);if(isAdmin(u))loadPendingCountForAdmin();}}
+
+    private void ensureAdminNotifications(){
+        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION_REQUEST);
+        }
+        Constraints constraints=new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+        OneTimeWorkRequest now=new OneTimeWorkRequest.Builder(PendingListingWorker.class).setConstraints(constraints).build();
+        WorkManager.getInstance(this).enqueueUniqueWork("motoverse_pending_alert_now",ExistingWorkPolicy.REPLACE,now);
+        PeriodicWorkRequest periodic=new PeriodicWorkRequest.Builder(PendingListingWorker.class,15,TimeUnit.MINUTES).setConstraints(constraints).build();
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork("motoverse_pending_alerts",ExistingPeriodicWorkPolicy.KEEP,periodic);
+    }
+
+    private void pushAuthStateToWeb(){FirebaseUser u=auth.getCurrentUser();JSONObject o=new JSONObject();try{if(u!=null){o.put("uid",u.getUid());o.put("name",u.getDisplayName()==null?"Motociclista":u.getDisplayName());o.put("email",u.getEmail()==null?"":u.getEmail());o.put("admin",isAdmin(u));o.put("verified",isAdmin(u)||u.isEmailVerified());}}catch(Exception ignored){}runJs("window.onNativeAuth&&window.onNativeAuth("+(u==null?"null":o.toString())+");");if(u!=null){saveUserProfile(u);loadGarageForUser(u);if(isAdmin(u)){loadPendingCountForAdmin();ensureAdminNotifications();if(openAdminReviewOnReady){openAdminReviewOnReady=false;runJs("setTimeout(function(){window.openAdminReview&&window.openAdminReview();},350);");}}}}
     private void saveUserProfile(FirebaseUser u){Map<String,Object>d=new HashMap<>();d.put("uid",u.getUid());d.put("name",u.getDisplayName()==null?"Motociclista":u.getDisplayName());d.put("email",u.getEmail()==null?"":u.getEmail());d.put("admin",isAdmin(u));d.put("verified",isAdmin(u)||u.isEmailVerified());d.put("lastLoginAt",FieldValue.serverTimestamp());db.collection("users").document(u.getUid()).set(d, SetOptions.merge());}
     private String friendly(Exception e){if(e instanceof FirebaseAuthException){String c=((FirebaseAuthException)e).getErrorCode();if("ERROR_WRONG_PASSWORD".equals(c)||"ERROR_INVALID_CREDENTIAL".equals(c))return "E-mail ou palavra-passe incorretos.";if("ERROR_USER_NOT_FOUND".equals(c))return "Não existe nenhuma conta com este e-mail.";if("ERROR_EMAIL_ALREADY_IN_USE".equals(c))return "Já existe uma conta com este e-mail.";if("ERROR_WEAK_PASSWORD".equals(c))return "A palavra-passe deve ter pelo menos 6 caracteres.";}return e==null||e.getLocalizedMessage()==null?"Não foi possível concluir a operação.":e.getLocalizedMessage();}
     private boolean valid(String email,String pass){if(email==null||email.trim().isEmpty()){sendError("Indica um e-mail válido.");return false;}if(pass==null||pass.length()<6){sendError("A palavra-passe deve ter pelo menos 6 caracteres.");return false;}return true;}
@@ -156,6 +182,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void sendSellerMessage(String listingId,String sellerUid,String text){FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão para responder ao anúncio.");return;}if(text==null||text.trim().isEmpty())return;String conv=listingId+"_"+u.getUid();Map<String,Object>c=new HashMap<>();c.put("listingId",listingId);c.put("buyerUid",u.getUid());c.put("buyerEmail",u.getEmail());c.put("sellerUid",sellerUid);c.put("updatedAt",FieldValue.serverTimestamp());db.collection("conversations").document(conv).set(c);Map<String,Object>m=new HashMap<>();m.put("senderUid",u.getUid());m.put("text",text.trim());m.put("createdAt",FieldValue.serverTimestamp());db.collection("conversations").document(conv).collection("messages").add(m).addOnSuccessListener(v->runJs("window.onSellerMessageSent&&window.onSellerMessageSent();")).addOnFailureListener(e->sendError("Não foi possível enviar a mensagem."));}
     }
 
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent!=null&&intent.getBooleanExtra("openAdminReview",false)){openAdminReviewOnReady=true;if(pageReady){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u)){openAdminReviewOnReady=false;runJs("setTimeout(function(){window.openAdminReview&&window.openAdminReview();},200);");}}}}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==GOOGLE_SIGN_IN_REQUEST){Task<GoogleSignInAccount>task=GoogleSignIn.getSignedInAccountFromIntent(data);try{GoogleSignInAccount a=task.getResult(ApiException.class);if(a!=null&&a.getIdToken()!=null)firebaseGoogle(a.getIdToken());else sendError("Login Google cancelado.");}catch(ApiException e){if(e.getStatusCode()==10)sendError("Google ainda não está autorizado para a assinatura atual da MotoVerse. Falta atualizar o SHA-1 no Firebase.");else sendError("Não foi possível entrar com Google ("+e.getStatusCode()+").");}return;}if(requestCode!=FILE_CHOOSER_REQUEST||fileCallback==null)return;Uri[]r=null;if(resultCode==Activity.RESULT_OK&&data!=null){if(data.getClipData()!=null){int c=data.getClipData().getItemCount();r=new Uri[c];for(int i=0;i<c;i++)r[i]=data.getClipData().getItemAt(i).getUri();}else if(data.getData()!=null)r=new Uri[]{data.getData()};}fileCallback.onReceiveValue(r);fileCallback=null;}
     @Override public void onBackPressed(){if(webView!=null&&webView.canGoBack())webView.goBack();else super.onBackPressed();}
 }
