@@ -22,6 +22,8 @@
     .mvBubbleTime{font-size:8px;opacity:.72;margin-top:4px}
     .mvFavOn{color:#ff7040!important;background:rgba(255,90,31,.22)!important}
     .mvSmall{font-size:10px;color:var(--muted)}
+    #authGate.show{pointer-events:auto!important}
+    #authGate.show .authBox,#authGate.show input,#authGate.show button{pointer-events:auto!important}
   `;
   document.head.appendChild(style);
 
@@ -92,7 +94,7 @@
   function decorateFavoriteButtons(){
     qa('.fav,.featureFav').forEach(btn=>{const rec=bikeRecord(btn);if(!rec)return;btn.dataset.mvFavId=rec.id;btn.onclick=function(ev){ev.preventDefault();ev.stopPropagation();if(!loginNeeded('guardar favoritos'))return;const exists=favorites.some(x=>x.id===rec.id);if(exists)Android.removeFavorite(rec.id);else Android.saveFavorite(JSON.stringify(rec));};});refreshFavoriteButtons();
   }
-  function refreshFavoriteButtons(){const ids=new Set(favorites.map(x=>x.id));qa('.fav,.featureFav').forEach(b=>{const on=ids.has(b.dataset.mvFavId);b.textContent=on?'♥':'♡';b.classList.toggle('mvFavOn',on)})}
+  function refreshFavoriteButtons(){const ids=new Set(favorites.map(x=>x.id));qa('.fav,.featureFav').forEach(b=>{const on=ids.has(b.dataset.mvFavId),symbol=on?'♥':'♡';if(b.textContent!==symbol)b.textContent=symbol;b.classList.toggle('mvFavOn',on)})}
   window.onFavoritesLoaded=function(items){favorites=Array.isArray(items)?items:[];setCount('#mvFavoritesCount',favorites.length);refreshFavoriteButtons();renderFavoritesModal();};
   window.onFavoriteSaved=function(){notify('Adicionada aos favoritos');Android.loadFavorites();};
   window.onFavoriteRemoved=function(){notify('Removida dos favoritos');Android.loadFavorites();};
@@ -122,7 +124,7 @@
   window.onMeetupDeleted=function(){notify('Encontro apagado');Android.loadMyMeetups();Android.loadMeetups()};
   window.onMeetupsLoaded=function(items){const list=q('#eventList');if(!list)return;qa('#eventList .mvCloudMeetup').forEach(x=>x.remove());(Array.isArray(items)?items:[]).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))).forEach(x=>{const dt=x.date?new Date(x.date+'T12:00:00'):new Date(),day=String(dt.getDate()).padStart(2,'0'),mon=dt.toLocaleDateString('pt-PT',{month:'short'}).replace('.','');const div=document.createElement('div');div.className='eventCard mvCloudMeetup';div.dataset.meetupId=x.id||'';div.innerHTML=`<div class="datebox"><strong>${day}</strong><span>${esc(mon)}</span></div><div class="eventText">${x.organizerVerified?'<span class="verifiedBadge">✓ Organizador verificado</span>':'<span class="badge live">MotoVerse</span>'}<h3>${esc(x.name||'Encontro')}</h3><p>${esc(x.location||'')} · ${esc(x.time||'Hora a definir')} · ${esc(x.type||'Passeio')}</p><p style="margin-top:5px">Criado por ${esc(x.organizerName||'Motociclista')}</p><div class="meetRow"><div class="avatars"><div class="avatar">MV</div></div></div></div>`;list.prepend(div)});};
 
-  function openSettings(){if(!loginNeeded('abrir as configurações'))return;const u=st()?.user||{};openModal(`<h2>Configurações</h2><div class="mvModalItem"><h3>Conta</h3><p>${esc(u.name||'Motociclista')}</p><p>${esc(u.email||'')}</p><p>${u.verified?'✓ Conta verificada':'Conta MotoVerse ativa'}</p></div><button class="btn secondary full" onclick="Android.requestNotificationPermission()">🔔 Permitir notificações</button><button class="btn secondary full" style="margin-top:8px" onclick="Android.openNotificationSettings()">Definições de notificações</button><button class="btn secondary full" style="margin-top:8px" onclick="Android.resetCurrentPassword()">Redefinir palavra-passe por e-mail</button><button class="btn secondary full" style="margin-top:8px" onclick="mvRefreshProfileNow()">Atualizar dados da conta</button><div class="notice" style="margin-top:12px">MotoVerse 1.11 · AUTOfamily Lda · geral@motoverse.pt</div>`)}
+  function openSettings(){if(!loginNeeded('abrir as configurações'))return;const u=st()?.user||{};openModal(`<h2>Configurações</h2><div class="mvModalItem"><h3>Conta</h3><p>${esc(u.name||'Motociclista')}</p><p>${esc(u.email||'')}</p><p>${u.verified?'✓ Conta verificada':'Conta MotoVerse ativa'}</p></div><button class="btn secondary full" onclick="Android.requestNotificationPermission()">🔔 Permitir notificações</button><button class="btn secondary full" style="margin-top:8px" onclick="Android.openNotificationSettings()">Definições de notificações</button><button class="btn secondary full" style="margin-top:8px" onclick="Android.resetCurrentPassword()">Redefinir palavra-passe por e-mail</button><button class="btn secondary full" style="margin-top:8px" onclick="mvRefreshProfileNow()">Atualizar dados da conta</button><div class="notice" style="margin-top:12px">MotoVerse 1.11.1 · AUTOfamily Lda · geral@motoverse.pt</div>`)}
   window.mvRefreshProfileNow=function(){refreshProfileData();notify('Dados atualizados')};window.onCurrentPasswordResetSent=function(){notify('E-mail de recuperação enviado')};window.onNotificationPermissionReady=function(){notify('Notificações disponíveis')};
 
   const oldMyListings=window.onMyListings;
@@ -135,6 +137,12 @@
   window.go=function(id,el){const r=oldGo?oldGo.apply(this,arguments):undefined;if(id==='profile')setTimeout(refreshProfileData,50);if(id==='events'&&window.Android&&Android.loadMeetups)setTimeout(()=>Android.loadMeetups(),50);return r};
 
   buildProfile();decorateFavoriteButtons();
-  const favObserver=new MutationObserver(()=>decorateFavoriteButtons());const app=q('.app');if(app)favObserver.observe(app,{childList:true,subtree:true});
+  let favRefreshScheduled=false;
+  const favObserver=new MutationObserver(()=>{
+    if(favRefreshScheduled)return;
+    favRefreshScheduled=true;
+    setTimeout(()=>{favRefreshScheduled=false;decorateFavoriteButtons()},60);
+  });
+  const exploreRoot=q('#exploreMotas');if(exploreRoot)favObserver.observe(exploreRoot,{childList:true,subtree:true});
   setTimeout(()=>{refreshProfileData();if(logged()&&window.Android&&Android.loadMeetups)Android.loadMeetups()},250);
 })();
