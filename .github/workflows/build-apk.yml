@@ -46,6 +46,9 @@ jobs:
           printf '\n' >> app/src/main/assets/firebase-bridge.js
           cat app/src/main/assets/fixes-v20.js >> app/src/main/assets/firebase-bridge.js
 
+      - name: Validate MotoVerse JavaScript
+        run: node --check app/src/main/assets/firebase-bridge.js
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
