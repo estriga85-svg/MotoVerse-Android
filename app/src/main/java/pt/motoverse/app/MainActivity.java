@@ -178,7 +178,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void loadGarage(){FirebaseUser u=auth.getCurrentUser();if(u!=null)loadGarageForUser(u);}
         @JavascriptInterface public void saveListing(String json){FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão antes de publicar um anúncio.");return;}try{Map<String,Object>d=jsonToMap(new JSONObject(json));d.put("ownerUid",u.getUid());d.put("ownerEmail",u.getEmail()==null?"":u.getEmail());d.put("ownerName",u.getDisplayName()==null?"Motociclista":u.getDisplayName());d.put("status","pending");d.put("createdAt",FieldValue.serverTimestamp());d.put("updatedAt",FieldValue.serverTimestamp());db.collection("listings").add(d).addOnSuccessListener(ref->{sendPendingAlert(ref.getId(),u);runJs("window.onListingSaved&&window.onListingSaved("+JSONObject.quote(ref.getId())+");");if(isAdmin(u))loadPendingCountForAdmin();}).addOnFailureListener(e->sendError("Não foi possível guardar o anúncio: "+e.getLocalizedMessage()));}catch(Exception e){sendError("Dados do anúncio inválidos.");}}
         @JavascriptInterface public void loadMyListings(){FirebaseUser u=auth.getCurrentUser();if(u==null)return;db.collection("listings").whereEqualTo("ownerUid",u.getUid()).get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onMyListings&&window.onMyListings("+a+");");});}
-        @JavascriptInterface public void loadApprovedListings(){db.collection("listings").whereEqualTo("status","approved").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onApprovedListings&&window.onApprovedListings("+a+");");});}
+        @JavascriptInterface public void loadApprovedListings(){db.collection("listings").whereEqualTo("status","approved").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onApprovedListings&&window.onApprovedListings("+a+");");}).addOnFailureListener(e->runJs("window.onApprovedListingsFailed&&window.onApprovedListingsFailed();"));}
         @JavascriptInterface public void loadPendingListingsAdmin(){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Área reservada ao revisor.");return;}db.collection("listings").whereEqualTo("status","pending").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onPendingListings&&window.onPendingListings("+a+");window.onPendingCount&&window.onPendingCount("+s.size()+");");});}
         @JavascriptInterface public void loadPendingCountAdmin(){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u))loadPendingCountForAdmin();}
         @JavascriptInterface public void reviewListing(String id,String status){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Apenas o revisor pode aprovar anúncios.");return;}if(!"approved".equals(status)&&!"rejected".equals(status))return;Map<String,Object>x=new HashMap<>();x.put("status",status);x.put("reviewedAt",FieldValue.serverTimestamp());x.put("reviewedBy",u.getEmail());db.collection("listings").document(id).update(x).addOnSuccessListener(v->{runJs("window.onReviewDone&&window.onReviewDone();");loadPendingCountForAdmin();}).addOnFailureListener(e->sendError("Não foi possível atualizar o anúncio."));}
@@ -194,6 +194,17 @@ public class MainActivity extends Activity {
                     i.putExtra(Intent.EXTRA_TITLE,"MotoVerse-historico.csv");
                     startActivityForResult(i,CSV_EXPORT_REQUEST);
                 }catch(Exception e){pendingExportCsv=null;sendError("Não foi possível abrir o seletor de ficheiros.");}
+            });
+        }
+        @JavascriptInterface public void openMapSearch(String query){
+            if(query==null||query.trim().isEmpty())return;
+            runOnUiThread(()->{
+                try{
+                    String safe=query.substring(0,Math.min(query.length(),180));
+                    Intent geo=new Intent(Intent.ACTION_VIEW,Uri.parse("geo:0,0?q="+Uri.encode(safe)));
+                    if(geo.resolveActivity(getPackageManager())!=null)startActivity(geo);
+                    else startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.google.com/maps/search/?api=1&query="+Uri.encode(safe))));
+                }catch(Exception e){sendError("Não foi possível abrir a pesquisa de serviços.");}
             });
         }
         @JavascriptInterface public void shareText(String subject,String body){
