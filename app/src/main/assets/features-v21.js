@@ -280,6 +280,27 @@
   window.onApprovedListings=function(items){if(oldApprove)oldApprove(items);marketplaceReady=true;drawMarketplace()};
   const oldFilters=window.applyBikeFilters;
   window.applyBikeFilters=function(){if(oldFilters)oldFilters();drawMarketplace()};
+
+  function installServices(){
+    const defs=[
+      ['#exploreOficinas','Oficinas de motas','Oficinas e manutenção na tua zona','oficina reparação de motas'],
+      ['#exploreStands','Concessionários','Descobrir concessionários de motas','concessionário de motas'],
+      ['#explorePecas','Peças e acessórios','Procurar lojas de peças e equipamentos','loja peças acessórios de motas']
+    ];
+    defs.forEach(([selector,title,description,term])=>{
+      const section=q(selector);if(!section||section.dataset.mvRealSearch)return;
+      section.dataset.mvRealSearch='1';
+      section.innerHTML='<div class="sectionHead"><h2>'+esc(title)+'</h2></div><div class="mvToolBox" style="margin:4px 0"><h3>'+esc(description)+'</h3><p>Pesquisa em lojas e empresas reais através do Google Maps, na localização que escolheste. Os resultados abrem fora da MotoVerse.</p><button class="btn primary full mvOpenServices">Pesquisar no Maps</button></div>'+(selector==='#explorePecas'?'<div class="notice">A publicação de anúncios de peças e acessórios dentro da MotoVerse ainda não está disponível.</div>':'');
+      section.querySelector('.mvOpenServices').onclick=()=>{
+        const locality=String(st()?.location||'Portugal');
+        if(window.Android?.openMapSearch)Android.openMapSearch(term+' '+locality);
+        else notice('A pesquisa no Maps só está disponível na app Android.');
+      };
+    });
+  }
+  window.onApprovedListingsFailed=function(){marketplaceReady=true;notice('Não foi possível atualizar os anúncios. Verifica a ligação e tenta novamente.');drawMarketplace()};
+
+  installServices();
   bindMarket();injectExtraTools();drawGarageTools();drawMarketplace();
   if(window.Android?.loadApprovedListings)Android.loadApprovedListings();
 })();
