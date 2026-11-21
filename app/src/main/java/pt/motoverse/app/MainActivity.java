@@ -196,6 +196,17 @@ public class MainActivity extends Activity {
                 }catch(Exception e){pendingExportCsv=null;sendError("Não foi possível abrir o seletor de ficheiros.");}
             });
         }
+        @JavascriptInterface public void openRoute(String origin,String destination){
+            if(origin==null||destination==null||origin.trim().isEmpty()||destination.trim().isEmpty())return;
+            runOnUiThread(()->{
+                try{
+                    String a=origin.trim().substring(0,Math.min(origin.trim().length(),140));
+                    String b=destination.trim().substring(0,Math.min(destination.trim().length(),140));
+                    Uri uri=Uri.parse("https://www.google.com/maps/dir/?api=1&origin="+Uri.encode(a)+"&destination="+Uri.encode(b)+"&travelmode=driving");
+                    startActivity(new Intent(Intent.ACTION_VIEW,uri));
+                }catch(Exception e){sendError("Não foi possível abrir o percurso no Maps.");}
+            });
+        }
         @JavascriptInterface public void openMapSearch(String query){
             if(query==null||query.trim().isEmpty())return;
             runOnUiThread(()->{
