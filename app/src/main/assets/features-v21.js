@@ -355,12 +355,34 @@
     applyMeetupFilter();
   };
   function injectExtraTools(){
+    attachVerificationControls();
     const menu=q('#mvProfileMenu');if(menu&&!q('#mvSafetyRow')){
       const safety=document.createElement('div');safety.id='mvSafetyRow';safety.className='menuItem';safety.innerHTML='<span>🛡 Guia de compra segura</span><span>›</span>';safety.onclick=openSafety;menu.appendChild(safety);
       const ride=document.createElement('div');ride.id='mvPreRideRow';ride.className='menuItem';ride.innerHTML='<span>🏍 Checklist antes da viagem</span><span>›</span>';ride.onclick=openPreRide;menu.appendChild(ride);
       const help=document.createElement('div');help.id='mvHelpRow';help.className='menuItem';help.innerHTML='<span>❔ Ajuda e suporte</span><span>›</span>';help.onclick=()=>window.openModal('<h2>Ajuda MotoVerse</h2><p class="mvInfo">Os anúncios entram em revisão antes de serem publicados. Usa Mensagens para contactar vendedores e guarda as intervenções na Garagem.</p><p class="mvInfo">Para assistência: <strong>geral@motoverse.pt</strong></p><p class="notice">Nunca envies palavras-passe ou códigos de autenticação. Os pagamentos de veículos são combinados diretamente entre comprador e vendedor, fora da MotoVerse.</p>');menu.appendChild(help);
     }
   }
+
+  function attachVerificationControls(){
+    const row=q('#mvSettingsRow');if(!row||row.dataset.mvVerifyBound)return;
+    row.dataset.mvVerifyBound='1';
+    const previous=row.onclick;
+    row.onclick=function(){
+      if(previous)previous.apply(this,arguments);
+      setTimeout(()=>{
+        const body=q('#modalContent'),h=body?.querySelector('h2');
+        if(!body||!h||h.textContent.trim()!=='Configurações'||q('#mvEmailVerificationControls'))return;
+        const p=document.createElement('div');p.id='mvEmailVerificationControls';p.className='mvToolBox';p.style.margin='12px 0';
+        p.innerHTML='<h3>Confirmação do e-mail</h3><p>Uma conta com e-mail confirmado pode mostrar esse estado nos encontros. A administração exige também e-mail confirmado.</p><div class="mvToolGrid"><button class="mvToolBtn" id="mvVerifySend">Enviar confirmação</button><button class="mvToolBtn" id="mvVerifyRefresh">Já confirmei — atualizar</button></div>';
+        body.appendChild(p);
+        q('#mvVerifySend').onclick=()=>{if(window.Android?.sendVerificationEmail)Android.sendVerificationEmail();else notice('Indisponível nesta versão.')};
+        q('#mvVerifyRefresh').onclick=()=>{if(window.Android?.refreshVerification)Android.refreshVerification();else notice('Indisponível nesta versão.')};
+      },0);
+    };
+  }
+  window.onVerificationEmailSent=()=>notice('Enviámos um e-mail para confirmares a conta.');
+  window.onEmailAlreadyVerified=()=>notice('Este e-mail já está confirmado.');
+
   const oldAuth=window.onNativeAuth;
   window.onNativeAuth=function(u){if(oldAuth)oldAuth(u);setTimeout(injectExtraTools,0)};
   const oldGo=window.go;
