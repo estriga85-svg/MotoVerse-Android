@@ -132,7 +132,7 @@ public class MainActivity extends Activity {
     private void runJs(String js){if(webView!=null)runOnUiThread(()->webView.evaluateJavascript(js,null));}
     private void sendError(String m){JSONObject o=new JSONObject();try{o.put("message",m==null?"Erro inesperado":m);}catch(Exception ignored){}runJs("window.onNativeError&&window.onNativeError("+o+");");}
 
-    private boolean isAdmin(FirebaseUser u){return u!=null&&u.getEmail()!=null&&ADMIN_EMAIL.equalsIgnoreCase(u.getEmail());}
+    private boolean isAdmin(FirebaseUser u){return u!=null&&u.isEmailVerified()&&u.getEmail()!=null&&ADMIN_EMAIL.equalsIgnoreCase(u.getEmail());}
 
     private void ensureAdminNotifications(){
         if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED){
@@ -240,7 +240,45 @@ public class MainActivity extends Activity {
                 }catch(Exception e){sendError("Não há aplicação de email disponível. Escreve para geral@motoverse.pt com o identificador "+listingId);}
             });
         }
-        @JavascriptInterface public void sendSellerMessage(String listingId,String sellerUid,String text){FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão para responder ao anúncio.");return;}if(text==null||text.trim().isEmpty())return;String conv=listingId+"_"+u.getUid();Map<String,Object>c=new HashMap<>();c.put("listingId",listingId);c.put("buyerUid",u.getUid());c.put("buyerEmail",u.getEmail());c.put("sellerUid",sellerUid);c.put("updatedAt",FieldValue.serverTimestamp());db.collection("conversations").document(conv).set(c);Map<String,Object>m=new HashMap<>();m.put("senderUid",u.getUid());m.put("text",text.trim());m.put("createdAt",FieldValue.serverTimestamp());db.collection("conversations").document(conv).collection("messages").add(m).addOnSuccessListener(v->runJs("window.onSellerMessageSent&&window.onSellerMessageSent();")).addOnFailureListener(e->sendError("Não foi possível enviar a mensagem."));}
+        @JavascriptInterface public void sendSellerMessage(String listingId,String sellerUid,String text){
+            FirebaseUser u=auth.getCurrentUser();
+            if(u==null){sendError("Inicia sessão para contactar o vendedor.");return;}
+            if(listingId==null||!listingId.matches("[A-Za-z0-9_-]{1,130}")||sellerUid==null||sellerUid.trim().isEmpty()){sendError("Anúncio inválido.");return;}
+            if(text==null||text.trim().isEmpty()||text.length()>8000){sendError("Escreve uma mensagem até 8000 caracteres.");return;}
+            String uid=u.getUid(),messageText=text.trim();
+            db.collection("listings").document(listingId).get().addOnSuccessListener(listing->{
+                if(!listing.exists()||!"approved".equals(listing.getString("status"))||!sellerUid.equals(listing.getString("ownerUid"))){sendError("Este anúncio deixou de estar disponível.");return;}
+                if(uid.equals(sellerUid)){sendError("Não podes enviar mensagens ao teu próprio anúncio.");return;}
+                String conv=listingId+"_"+uid;
+                Map<String,Object>record=new HashMap<>();
+                record.put("listingId",listingId);record.put("buyerUid",uid);
+                record.put("buyerEmail",u.getEmail()==null?"":u.getEmail());
+                record.put("buyerName",u.getDisplayName()==null?"Motociclista":u.getDisplayName());
+                record.put("sellerUid",sellerUid);
+                record.put("updatedAt",FieldValue.serverTimestamp());
+                db.collection("conversations").document(conv).set(record,SetOptions.merge()).addOnSuccessListener(v->{
+                    Map<String,Object>m=new HashMap<>();m.put("senderUid",uid);
+                    m.put("text",messageText);m.put("createdAt",FieldValue.serverTimestamp());
+                    db.collection("conversations").document(conv).collection("messages").add(m)
+                        .addOnSuccessListener(sent->runJs("window.onSellerMessageSent&&window.onSellerMessageSent();"))
+                        .addOnFailureListener(e->sendError("Não foi possível enviar a mensagem."));
+                }).addOnFailureListener(e->sendError("Não foi possível abrir a conversa."));
+            }).addOnFailureListener(e->sendError("Não foi possível confirmar o anúncio."));
+        }
+        @JavascriptInterface public void sendVerificationEmail(){
+            FirebaseUser u=auth.getCurrentUser();
+            if(u==null){sendError("Inicia sessão para verificar o e-mail.");return;}
+            if(u.isEmailVerified()){runJs("window.onEmailAlreadyVerified&&window.onEmailAlreadyVerified();");return;}
+            u.sendEmailVerification().addOnCompleteListener(t->{
+                if(t.isSuccessful())runJs("window.onVerificationEmailSent&&window.onVerificationEmailSent();");
+                else sendError("Não foi possível enviar o e-mail de confirmação.");
+            });
+        }
+        @JavascriptInterface public void refreshVerification(){
+            FirebaseUser u=auth.getCurrentUser();
+            if(u==null){sendError("Inicia sessão primeiro.");return;}
+            u.reload().addOnCompleteListener(t->{if(t.isSuccessful())pushAuthStateToWeb();else sendError("Não foi possível atualizar o estado do e-mail.");});
+        }
     }
 
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent!=null&&intent.getBooleanExtra("openAdminReview",false)){openAdminReviewOnReady=true;if(pageReady){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u)){openAdminReviewOnReady=false;runJs("setTimeout(function(){window.openAdminReview&&window.openAdminReview();},200);");}}}}
