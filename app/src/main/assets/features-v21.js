@@ -256,6 +256,14 @@
     if(oldMeetups)oldMeetups(items);
     const list=q('#eventList');if(!list)return;
     qa('#eventList > .eventCard:not(.mvCloudMeetup)').forEach(node=>node.remove());
+
+    qa('#eventList .mvCloudMeetup').forEach(node=>{
+      const event=(Array.isArray(items)?items:[]).find(x=>String(x.id)===node.dataset.meetupId);
+      const badge=node.querySelector('.verifiedBadge');if(badge)badge.textContent='✓ E-mail confirmado';
+      const row=node.querySelector('.meetRow');if(!row||!event?.location)return;
+      const button=document.createElement('button');button.className='mvCalendarBtn';button.type='button';
+      button.textContent='📍 Ver local';button.onclick=()=>{if(window.Android?.openMapSearch)Android.openMapSearch(String(event.location)+' Portugal');else notice('Mapa só disponível na app Android.')};row.appendChild(button);
+    });
     const empty=q('#mvNoMeetups');
     if(!list.querySelector('.mvCloudMeetup')&&!empty)list.innerHTML='<div id="mvNoMeetups" class="empty">Ainda não há encontros publicados. Entra na tua conta e cria o primeiro.</div>';
     if(list.querySelector('.mvCloudMeetup')&&empty)empty.remove();
