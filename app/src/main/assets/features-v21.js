@@ -265,9 +265,80 @@
       card.appendChild(b);
     });
   };
+
+  let meetupRecords=[], meetupFilter='Todos';
+  function renderHomeMeetups(records){
+    const today=new Date().toISOString().slice(0,10);
+    const upcoming=(Array.isArray(records)?records:[]).filter(x=>x&&x.date&&x.date>=today).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const zone=q('.zoneEvent'),spots=q('.meetGrid');
+    if(zone){
+      zone.style.backgroundImage='none';zone.style.backgroundColor='#151c21';
+      if(upcoming.length){
+        const x=upcoming[0],dt=new Date(String(x.date)+'T12:00:00');
+        const day=String(dt.getDate()).padStart(2,'0'),month=dt.toLocaleDateString('pt-PT',{month:'short'}).replace('.','').toUpperCase();
+        zone.innerHTML='<div class="zoneEventDate"><span>'+esc(dt.toLocaleDateString('pt-PT',{weekday:'short'}).toUpperCase())+'</span><strong>'+day+'</strong><span>'+esc(month)+'</span></div><div class="zoneEventBody"><h3>'+esc(x.name||'Encontro MotoVerse')+'</h3><p>⌖ '+esc(x.location||'Portugal')+' · '+esc(x.time||'Hora a definir')+'</p><p>Organizado por '+esc(x.organizerName||'Motociclista')+'</p><div class="eventMiniTags"><span>'+esc(x.type||'Passeio')+'</span><span>Evento publicado</span></div><button class="eventCta" id="mvSeeNextEvent">Ver encontros →</button></div>';
+        q('#mvSeeNextEvent').onclick=()=>window.go('community');
+      }else{
+        zone.innerHTML='<div class="zoneEventBody"><h3>Ainda sem encontros agendados</h3><p>Quando alguém publicar um encontro, aparece aqui.</p><button class="eventCta" id="mvCreateFirstEvent">Criar um encontro →</button></div>';
+        q('#mvCreateFirstEvent').onclick=()=>{window.go('community');window.openMeetup&&window.openMeetup()};
+      }
+    }
+    if(spots){
+      if(upcoming.length){
+        spots.innerHTML=upcoming.slice(0,2).map(x=>'<button class="meetSpot" type="button" data-mv-spot="'+esc(x.id||'')+'"><div><strong>'+esc(x.name||'Encontro')+'</strong><small>⌖ '+esc(x.location||'Local por definir')+' · '+esc(x.date||'')+'</small></div></button>').join('');
+        qa('.meetGrid [data-mv-spot]').forEach(btn=>{btn.onclick=()=>{const e=upcoming.find(x=>x.id===btn.dataset.mvSpot);if(e?.location&&window.Android?.openMapSearch)Android.openMapSearch(String(e.location)+' Portugal');else window.go('community')}});
+      }else{
+        spots.innerHTML='<button class="meetSpot" style="width:100%;grid-column:1/-1" id="mvMeetSearchMap"><div><strong>Descobrir locais no Maps</strong><small>Pesquisar espaços de encontro de motociclistas na tua zona</small></div></button>';
+        q('#mvMeetSearchMap').onclick=()=>{if(window.Android?.openMapSearch)Android.openMapSearch('pontos de encontro motards '+String(st()?.location||'Portugal'));else notice('Disponível na aplicação Android.')};
+      }
+    }
+  }
+  function currentLocalDate(){
+    const t=new Date();return String(t.getFullYear())+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');
+  }
+  function applyMeetupFilter(){
+    const dateNow=currentLocalDate(),from=new Date(dateNow+'T00:00:00'),list=q('#eventList');if(!list)return;
+    let visible=0;
+    qa('#eventList .mvCloudMeetup').forEach(el=>{
+      const x=meetupRecords.find(m=>String(m.id)===el.dataset.meetupId),dt=x?.date?new Date(x.date+'T12:00:00'):null;
+      let ok=!!x;
+      if(meetupFilter==='Hoje')ok=ok&&x.date===dateNow;
+      else if(meetupFilter==='Fim de semana'){
+        const days=dt?Math.floor((dt.getTime()-from.getTime())/86400000):100;
+        ok=ok&&days>=0&&days<8&&(dt.getDay()===0||dt.getDay()===6);
+      }else if(meetupFilter==='Passeios')ok=ok&&String(x.type||'').toLowerCase()==='passeio';
+      else if(meetupFilter==='Convívios')ok=ok&&String(x.type||'').toLowerCase()==='convívio';
+      else if(meetupFilter==='Track Day')ok=ok&&String(x.type||'').toLowerCase()==='track day';
+      el.style.display=ok?'':'none';if(ok)visible++;
+    });
+    const existing=q('#mvNoFilteredMeetups');if(existing)existing.remove();
+    if(meetupRecords.length&&!visible){
+      const div=document.createElement('div');div.id='mvNoFilteredMeetups';div.className='empty';div.textContent='Não há encontros para este filtro.';list.appendChild(div);
+    }
+  }
+  function installCommunityTools(){
+    const root=q('#community');if(!root||root.dataset.mvToolsInstalled)return;
+    root.dataset.mvToolsInstalled='1';
+    const subtitle=root.querySelector('.sectionHead h2');
+    if(subtitle&&subtitle.textContent==='Perto de ti')subtitle.textContent='Encontros publicados';
+    const mapsButton=root.querySelector('.grid2 .quick:nth-child(2)');
+    if(mapsButton){mapsButton.removeAttribute('onclick');const strong=mapsButton.querySelector('strong'),small=mapsButton.querySelector('span');if(strong)strong.textContent='Pesquisar no mapa';if(small)small.textContent='Locais na zona selecionada';mapsButton.onclick=()=>{if(window.Android?.openMapSearch)Android.openMapSearch('encontros de motas '+String(st()?.location||'Portugal'));else notice('Pesquisa disponível na aplicação Android.')}}
+    const chips=qa('#community .chips .chip');
+    chips.forEach(b=>{b.onclick=()=>{meetupFilter=b.textContent.trim();chips.forEach(x=>x.classList.toggle('active',x===b));applyMeetupFilter()}});
+    const sections=qa('#community .section');
+    const routes=sections.find(sec=>sec.querySelector('.sectionHead h2')?.textContent==='Descobrir rotas');
+    if(routes){
+      routes.innerHTML='<div class="sectionHead"><h2>Planear percurso</h2></div><div class="mvToolBox" style="margin:0"><h3>🗺 Percurso de mota</h3><p>Escolhe partida e destino. O Google Maps calcula a rota, distância e duração reais.</p><div class="field"><label>Partida</label><input id="mvRouteStart" placeholder="Ex.: Setúbal"></div><div class="field"><label>Destino</label><input id="mvRouteEnd" placeholder="Ex.: Cabo Espichel"></div><button class="btn primary full" id="mvRouteGo">Abrir direções no Maps</button></div>';
+      const loc=st()?.location||'';if(loc!=='Portugal'&&loc!=='Perto de mim')q('#mvRouteStart').value=loc;
+      q('#mvRouteGo').onclick=()=>{const start=q('#mvRouteStart').value.trim(),end=q('#mvRouteEnd').value.trim();if(!start||!end)return notice('Indica partida e destino.');if(window.Android?.openRoute)Android.openRoute(start,end);else notice('Planeador disponível na app Android.')};
+    }
+  }
+
   const oldMeetups=window.onMeetupsLoaded;
   window.onMeetupsLoaded=function(items){
+    meetupRecords=Array.isArray(items)?items:[];
     if(oldMeetups)oldMeetups(items);
+    renderHomeMeetups(meetupRecords);
     const list=q('#eventList');if(!list)return;
     qa('#eventList > .eventCard:not(.mvCloudMeetup)').forEach(node=>node.remove());
 
@@ -281,6 +352,7 @@
     const empty=q('#mvNoMeetups');
     if(!list.querySelector('.mvCloudMeetup')&&!empty)list.innerHTML='<div id="mvNoMeetups" class="empty">Ainda não há encontros publicados. Entra na tua conta e cria o primeiro.</div>';
     if(list.querySelector('.mvCloudMeetup')&&empty)empty.remove();
+    applyMeetupFilter();
   };
   function injectExtraTools(){
     const menu=q('#mvProfileMenu');if(menu&&!q('#mvSafetyRow')){
@@ -323,7 +395,7 @@
   }
   window.onApprovedListingsFailed=function(){marketplaceReady=true;notice('Não foi possível atualizar os anúncios. Verifica a ligação e tenta novamente.');drawMarketplace()};
 
-  installServices();
+  installServices();installCommunityTools();renderHomeMeetups([]);
   bindMarket();injectExtraTools();drawGarageTools();drawMarketplace();
   if(window.Android?.loadApprovedListings)Android.loadApprovedListings();
 })();
