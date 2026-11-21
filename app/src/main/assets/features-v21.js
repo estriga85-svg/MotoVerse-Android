@@ -134,6 +134,20 @@
     window.openModal('<h2>Compra e venda segura</h2><ol class="mvInfo"><li>Confirma presencialmente o número de quadro (VIN) e os documentos originais da mota.</li><li>Verifica travões, pneus, direção, suspensões e sinais de acidentes. Uma oficina independente pode ajudar.</li><li>Desconfia de preços muito abaixo do mercado, pedidos de códigos e pagamentos antecipados.</li><li>Combina encontros em locais seguros e informa alguém da visita.</li><li>Faz a transferência de propriedade pelos canais oficiais e guarda comprovativos.</li><li>Nunca partilhes palavras-passe, códigos de autenticação ou documentos sem necessidade.</li></ol><p class="notice">As dicas de segurança são informativas. A MotoVerse não intermedeia pagamentos nem verifica automaticamente VIN, sinistros ou titularidade.</p>');
   }
   window.mvSafety=openSafety;
+
+  function openPreRide(){
+    const day=new Date().toISOString().slice(0,10);
+    const key='mv_pre_ride_'+day;
+    const items=['Pneus: estado e pressão','Travões dianteiro e traseiro','Corrente / transmissão e lubrificação','Luzes, piscas e buzina','Níveis e possíveis fugas','Espelhos, comandos e descanso','Capacete e equipamento de proteção','Combustível, tempo e percurso'];
+    let done=[];try{done=JSON.parse(localStorage.getItem(key)||'[]');if(!Array.isArray(done))done=[]}catch(e){}
+    window.openModal('<h2>Checklist antes da viagem</h2><p class="notice">Verificação rápida para hoje, '+esc(dateText(day))+'. Não substitui as instruções do fabricante nem uma verificação profissional.</p><div id="mvPreRideCount" class="mvChecklistProgress"></div>'+items.map((text,i)=>'<label class="mvChecklist"><input data-mv-ride="'+i+'" type="checkbox" '+(done.includes(i)?'checked':'')+'><span>'+esc(text)+'</span></label>').join('')+'<button class="btn secondary full" id="mvPreRideReset" style="margin-top:14px">Recomeçar lista</button>');
+    const refresh=()=>{const checked=qa('[data-mv-ride]:checked').map(x=>Number(x.dataset.mvRide));q('#mvPreRideCount').textContent=checked.length+' de '+items.length+' verificações feitas';try{localStorage.setItem(key,JSON.stringify(checked))}catch(e){}};
+    qa('[data-mv-ride]').forEach(el=>el.onchange=refresh);
+    q('#mvPreRideReset').onclick=()=>{qa('[data-mv-ride]').forEach(el=>el.checked=false);refresh()};
+    refresh();
+  }
+  window.mvPreRide=openPreRide;
+
   function bindMarket(){
     const cards=q('#exploreMotas .cards'),feat=q('.featureScroll');
     [cards,feat].forEach(root=>{if(!root||root.dataset.mvClickBound)return;root.dataset.mvClickBound='1';root.addEventListener('click',e=>{if(e.target.closest('.fav,.featureFav'))return;const card=e.target.closest('[data-mv-listing]');if(card)openListing(card.dataset.mvListing)})});
@@ -271,6 +285,7 @@
   function injectExtraTools(){
     const menu=q('#mvProfileMenu');if(menu&&!q('#mvSafetyRow')){
       const safety=document.createElement('div');safety.id='mvSafetyRow';safety.className='menuItem';safety.innerHTML='<span>🛡 Guia de compra segura</span><span>›</span>';safety.onclick=openSafety;menu.appendChild(safety);
+      const ride=document.createElement('div');ride.id='mvPreRideRow';ride.className='menuItem';ride.innerHTML='<span>🏍 Checklist antes da viagem</span><span>›</span>';ride.onclick=openPreRide;menu.appendChild(ride);
       const help=document.createElement('div');help.id='mvHelpRow';help.className='menuItem';help.innerHTML='<span>❔ Ajuda e suporte</span><span>›</span>';help.onclick=()=>window.openModal('<h2>Ajuda MotoVerse</h2><p class="mvInfo">Os anúncios entram em revisão antes de serem publicados. Usa Mensagens para contactar vendedores e guarda as intervenções na Garagem.</p><p class="mvInfo">Para assistência: <strong>geral@motoverse.pt</strong></p><p class="notice">Nunca envies palavras-passe ou códigos de autenticação. Os pagamentos de veículos são combinados diretamente entre comprador e vendedor, fora da MotoVerse.</p>');menu.appendChild(help);
     }
   }
