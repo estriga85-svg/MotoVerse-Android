@@ -390,7 +390,9 @@
     const result=oldGo?oldGo.apply(this,arguments):undefined;
     if(id==='profile')setTimeout(injectExtraTools,0);
     if(id==='garage')setTimeout(drawGarageTools,0);
-    if(id==='explore')setTimeout(drawMarketplace,0);
+    if(id==='explore'){setTimeout(drawMarketplace,0);if(window.Android?.loadApprovedListings)Android.loadApprovedListings();}
+    if(id==='community'&&window.Android?.loadMeetups)Android.loadMeetups();
+    if(id==='home'){if(window.Android?.loadApprovedListings)Android.loadApprovedListings();if(window.Android?.loadMeetups)Android.loadMeetups();}
     return result;
   };
   const oldApprove=window.onApprovedListings;
