@@ -64,6 +64,7 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 1001;
     private static final int GOOGLE_SIGN_IN_REQUEST = 1002;
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1003;
+    private static final int CSV_EXPORT_REQUEST = 1004;
     private static final String ADMIN_EMAIL = "estriga85@gmail.com";
 
     private WebView webView;
@@ -72,6 +73,7 @@ public class MainActivity extends Activity {
     private FirebaseFirestore db;
     private GoogleSignInClient googleClient;
     private boolean pageReady = false;
+    private String pendingExportCsv = null;
     private boolean openAdminReviewOnReady = false;
 
     @Override public void onCreate(Bundle savedInstanceState) {
@@ -151,7 +153,8 @@ public class MainActivity extends Activity {
     private void signInEmail(String email,String pass){if(!valid(email,pass))return;auth.signInWithEmailAndPassword(email.trim(),pass).addOnCompleteListener(this,t->{if(t.isSuccessful()){pushAuthStateToWeb();runJs("window.onAuthSuccess&&window.onAuthSuccess('Sessão iniciada');");}else sendError(friendly(t.getException()));});}
     private void startGoogle(){startActivityForResult(googleClient.getSignInIntent(),GOOGLE_SIGN_IN_REQUEST);}
     private void firebaseGoogle(String token){AuthCredential c=GoogleAuthProvider.getCredential(token,null);auth.signInWithCredential(c).addOnCompleteListener(this,t->{if(t.isSuccessful()){pushAuthStateToWeb();runJs("window.onAuthSuccess&&window.onAuthSuccess('Sessão iniciada com Google');");}else sendError("Não foi possível iniciar sessão com Google.");});}
-    private Map<String,Object> jsonToMap(JSONObject o)throws JSONException{Map<String,Object>m=new HashMap<>();JSONArray names=o.names();if(names==null)return m;for(int i=0;i<names.length();i++){String k=names.getString(i);Object v=o.get(k);if(v instanceof JSONArray){JSONArray a=(JSONArray)v;List<Object>l=new ArrayList<>();for(int j=0;j<a.length();j++)l.add(a.get(j));m.put(k,l);}else m.put(k,v==JSONObject.NULL?null:v);}return m;}
+    private Object jsonValue(Object v)throws JSONException{if(v==JSONObject.NULL)return null;if(v instanceof JSONObject)return jsonToMap((JSONObject)v);if(v instanceof JSONArray){JSONArray arr=(JSONArray)v;List<Object>list=new ArrayList<>();for(int i=0;i<arr.length();i++)list.add(jsonValue(arr.get(i)));return list;}return v;}
+    private Map<String,Object> jsonToMap(JSONObject o)throws JSONException{Map<String,Object>m=new HashMap<>();JSONArray names=o.names();if(names==null)return m;for(int i=0;i<names.length();i++){String k=names.getString(i);m.put(k,jsonValue(o.get(k)));}return m;}
     private JSONObject docJson(DocumentSnapshot d){JSONObject o=new JSONObject();try{o.put("id",d.getId());if(d.getData()!=null)for(Map.Entry<String,Object>e:d.getData().entrySet()){Object v=e.getValue();o.put(e.getKey(),v instanceof Timestamp?((Timestamp)v).toDate().getTime():JSONObject.wrap(v));}}catch(Exception ignored){}return o;}
     private JSONObject mapJson(Map<String,Object> data){JSONObject o=new JSONObject();try{for(Map.Entry<String,Object>e:data.entrySet()){Object v=e.getValue();o.put(e.getKey(),v instanceof Timestamp?((Timestamp)v).toDate().getTime():JSONObject.wrap(v));}}catch(Exception ignored){}return o;}
     private void loadLegacyGarage(FirebaseUser u){db.collection("garages").document(u.getUid()).get().addOnSuccessListener(d->{if(d.exists())runJs("window.onGarageLoaded&&window.onGarageLoaded("+docJson(d)+");");});}
@@ -179,10 +182,46 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void loadPendingListingsAdmin(){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Área reservada ao revisor.");return;}db.collection("listings").whereEqualTo("status","pending").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onPendingListings&&window.onPendingListings("+a+");window.onPendingCount&&window.onPendingCount("+s.size()+");");});}
         @JavascriptInterface public void loadPendingCountAdmin(){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u))loadPendingCountForAdmin();}
         @JavascriptInterface public void reviewListing(String id,String status){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Apenas o revisor pode aprovar anúncios.");return;}if(!"approved".equals(status)&&!"rejected".equals(status))return;Map<String,Object>x=new HashMap<>();x.put("status",status);x.put("reviewedAt",FieldValue.serverTimestamp());x.put("reviewedBy",u.getEmail());db.collection("listings").document(id).update(x).addOnSuccessListener(v->{runJs("window.onReviewDone&&window.onReviewDone();");loadPendingCountForAdmin();}).addOnFailureListener(e->sendError("Não foi possível atualizar o anúncio."));}
+
+        @JavascriptInterface public void exportGarageCsv(String csv){
+            if(csv==null||csv.length()>1000000){sendError("Histórico demasiado grande para exportar.");return;}
+            runOnUiThread(()->{
+                pendingExportCsv=csv;
+                try{
+                    Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("text/csv");
+                    i.putExtra(Intent.EXTRA_TITLE,"MotoVerse-historico.csv");
+                    startActivityForResult(i,CSV_EXPORT_REQUEST);
+                }catch(Exception e){pendingExportCsv=null;sendError("Não foi possível abrir o seletor de ficheiros.");}
+            });
+        }
+        @JavascriptInterface public void shareText(String subject,String body){
+            runOnUiThread(()->{
+                try{
+                    Intent i=new Intent(Intent.ACTION_SEND);
+                    i.setType("text/plain");
+                    i.putExtra(Intent.EXTRA_SUBJECT,subject==null?"MotoVerse":subject);
+                    i.putExtra(Intent.EXTRA_TEXT,body==null?"MotoVerse":body.substring(0,Math.min(body.length(),16000)));
+                    startActivity(Intent.createChooser(i,"Partilhar via"));
+                }catch(Exception e){sendError("Não foi possível partilhar os detalhes.");}
+            });
+        }
+        @JavascriptInterface public void reportListing(String listingId,String listingTitle){
+            if(listingId==null||!listingId.matches("[A-Za-z0-9_-]{1,130}")){sendError("Identificador inválido.");return;}
+            runOnUiThread(()->{
+                try{
+                    Intent i=new Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:geral@motoverse.pt"));
+                    i.putExtra(Intent.EXTRA_SUBJECT,"Denúncia de anúncio MotoVerse: "+listingId);
+                    i.putExtra(Intent.EXTRA_TEXT,"Anúncio: "+(listingTitle==null?"":listingTitle)+"\nID: "+listingId+"\nMotivo da denúncia:\n");
+                    startActivity(i);
+                }catch(Exception e){sendError("Não há aplicação de email disponível. Escreve para geral@motoverse.pt com o identificador "+listingId);}
+            });
+        }
         @JavascriptInterface public void sendSellerMessage(String listingId,String sellerUid,String text){FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão para responder ao anúncio.");return;}if(text==null||text.trim().isEmpty())return;String conv=listingId+"_"+u.getUid();Map<String,Object>c=new HashMap<>();c.put("listingId",listingId);c.put("buyerUid",u.getUid());c.put("buyerEmail",u.getEmail());c.put("sellerUid",sellerUid);c.put("updatedAt",FieldValue.serverTimestamp());db.collection("conversations").document(conv).set(c);Map<String,Object>m=new HashMap<>();m.put("senderUid",u.getUid());m.put("text",text.trim());m.put("createdAt",FieldValue.serverTimestamp());db.collection("conversations").document(conv).collection("messages").add(m).addOnSuccessListener(v->runJs("window.onSellerMessageSent&&window.onSellerMessageSent();")).addOnFailureListener(e->sendError("Não foi possível enviar a mensagem."));}
     }
 
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent!=null&&intent.getBooleanExtra("openAdminReview",false)){openAdminReviewOnReady=true;if(pageReady){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u)){openAdminReviewOnReady=false;runJs("setTimeout(function(){window.openAdminReview&&window.openAdminReview();},200);");}}}}
-    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==GOOGLE_SIGN_IN_REQUEST){Task<GoogleSignInAccount>task=GoogleSignIn.getSignedInAccountFromIntent(data);try{GoogleSignInAccount a=task.getResult(ApiException.class);if(a!=null&&a.getIdToken()!=null)firebaseGoogle(a.getIdToken());else sendError("Login Google cancelado.");}catch(ApiException e){if(e.getStatusCode()==10)sendError("Google ainda não está autorizado para a assinatura atual da MotoVerse. Falta atualizar o SHA-1 no Firebase.");else sendError("Não foi possível entrar com Google ("+e.getStatusCode()+").");}return;}if(requestCode!=FILE_CHOOSER_REQUEST||fileCallback==null)return;Uri[]r=null;if(resultCode==Activity.RESULT_OK&&data!=null){if(data.getClipData()!=null){int c=data.getClipData().getItemCount();r=new Uri[c];for(int i=0;i<c;i++)r[i]=data.getClipData().getItemAt(i).getUri();}else if(data.getData()!=null)r=new Uri[]{data.getData()};}fileCallback.onReceiveValue(r);fileCallback=null;}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==CSV_EXPORT_REQUEST){String csv=pendingExportCsv;pendingExportCsv=null;if(resultCode==Activity.RESULT_OK&&data!=null&&data.getData()!=null&&csv!=null){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new java.io.IOException("Ficheiro indisponível");out.write(csv.getBytes(StandardCharsets.UTF_8));runJs("window.onGarageCsvExported&&window.onGarageCsvExported();");}catch(Exception e){sendError("Não foi possível guardar o ficheiro CSV.");}}return;}if(requestCode==GOOGLE_SIGN_IN_REQUEST){Task<GoogleSignInAccount>task=GoogleSignIn.getSignedInAccountFromIntent(data);try{GoogleSignInAccount a=task.getResult(ApiException.class);if(a!=null&&a.getIdToken()!=null)firebaseGoogle(a.getIdToken());else sendError("Login Google cancelado.");}catch(ApiException e){if(e.getStatusCode()==10)sendError("Google ainda não está autorizado para a assinatura atual da MotoVerse. Falta atualizar o SHA-1 no Firebase.");else sendError("Não foi possível entrar com Google ("+e.getStatusCode()+").");}return;}if(requestCode!=FILE_CHOOSER_REQUEST||fileCallback==null)return;Uri[]r=null;if(resultCode==Activity.RESULT_OK&&data!=null){if(data.getClipData()!=null){int c=data.getClipData().getItemCount();r=new Uri[c];for(int i=0;i<c;i++)r[i]=data.getClipData().getItemAt(i).getUri();}else if(data.getData()!=null)r=new Uri[]{data.getData()};}fileCallback.onReceiveValue(r);fileCallback=null;}
     @Override public void onBackPressed(){if(webView!=null&&webView.canGoBack())webView.goBack();else super.onBackPressed();}
 }
