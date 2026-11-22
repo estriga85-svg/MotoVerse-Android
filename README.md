@@ -13,8 +13,8 @@ MotoVerse pertence ao grupo **AUTOfamily Lda** — geral@motoverse.pt
 O diretório é distribuído no APK, em `app/src/main/assets/directory-data.js`. Inclui factos
 comerciais com fonte por ficha e moradas aproximadas quando indicado. Dados
 © [contribuidores OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL).
-Localidades de [GeoNames](https://www.geonames.org/) (CC BY 4.0). Os números de
-vendas, contatos e redes oficiais devem ser atualizados a partir das fontes das fichas.
+Localidades de [GeoNames](https://www.geonames.org/) (CC BY 4.0). Os dados de
+venda, contactos e redes oficiais devem ser atualizados a partir das fontes das fichas.
 
 A publicação usa a coleção Firestore `meetups`. As preferências de notificação são
 guardadas no dispositivo por conta. A app usa um listener em primeiro plano e

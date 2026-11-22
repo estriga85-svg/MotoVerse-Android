@@ -95,7 +95,7 @@ exports.directoryGoogleRating = onRequest({ region, secrets:[placesKey], timeout
   if (!allowed) return res.sendStatus(429);
 
   try {
-    const body = {textQuery:query, languageCode:'pt-PT', regionCode:'PT', maxResultCount:5};
+    const body = {textQuery:query, languageCode:'pt-PT', regionCode:'PT', pageSize:5};
     if (coords) body.locationBias={circle:{center:{latitude:coords[0],longitude:coords[1]},radius:1000}};
     const response = await fetch('https://places.googleapis.com/v1/places:searchText',{
       method:'POST', signal:AbortSignal.timeout(9000),
