@@ -18,15 +18,34 @@
   const hasCoords = place => place && Number.isFinite(place.lat) && Number.isFinite(place.lon);
   const positionOf = place => hasCoords(place) ? place : {lat:place.areaLat,lon:place.areaLon};
   const directory = Array.isArray(window.mvBusinessDirectory) ? window.mvBusinessDirectory : [];
+  const directoryIndex = new Map(directory.map((place,index)=>[place,index]));
   const areas = window.mvDirectoryAreas || {};
   const brandsFor = (place, mode) => mode==='workshop' ? (place.workshopBrands||place.brands||[]) : (place.brands||[]);
   const names = (a,b) => a.localeCompare(b,'pt-PT',{sensitivity:'base'});
+  // ACAP, annual registrations of motorcycles over 50 cm³, published in 2026 (2025 figures).
+  const leadingBrands = ['Honda','Yamaha','BMW Motorrad','CFMOTO','Voge','Zontes','Keeway','QJMotor','Benelli','SYM','Kawasaki','Suzuki'];
+  const businessLookup = place => [place.name,placeText(place),'Portugal'].filter(Boolean).join(', ');
+  const exactCoords = place => hasCoords(place) ? place.lat+','+place.lon : '';
   const directoryViews = new Map();
   let directoryOrigin = null;
   let directoryZone = null;
   let directoryRequest = 0;
   let directoryLookup = null;
   let ratingRequest = 0;
+  let ratingsUnavailable = false;
+  let listRating = null;
+  let lastRatingPeriod = 0;
+  let ratingsInPeriod = 0;
+  let ratingTimer = null;
+  const ratingQueue = [];
+  const ratingObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) {
+      const target = entry.target;
+      ratingObserver.unobserve(target);
+      ratingQueue.push(target);
+    }
+    loadVisibleRating();
+  }) : null;
 
   const labels = {
     cafezada:'Cafezada', passeio:'Passeio', en2:'Tour EN2', tour:'Tour', trilho:'Trilhos / Off-road', trackday:'Track Day'
@@ -46,6 +65,7 @@
     '.mvDirectoryControls input,.mvDirectoryControls select{min-width:0;width:100%;padding:10px;border:1px solid var(--line);border-radius:12px;color:var(--text);background:var(--panel)}' +
     '.mvDirectoryControls input{grid-column:1/-1}.mvDirectoryList{display:grid;gap:8px}.mvDirectoryCard{display:block;width:100%;text-align:left;color:var(--text);padding:13px;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:pointer}' +
     '.mvDirectoryCard strong,.mvDirectoryCard small{display:block;overflow-wrap:anywhere}.mvDirectoryCard small{margin-top:5px;color:var(--muted)}.mvDirectoryHint{font-size:11px;color:var(--muted);line-height:1.5}.mvDirectoryHint button{font:inherit;color:var(--accent2);background:none;border:0;padding:0;text-align:left;text-decoration:underline}' +
+    '.mvBusinessRow{min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px}.mvBusinessHeading{display:flex;align-items:flex-start;gap:8px;justify-content:space-between}.mvBusinessHeading button{cursor:pointer}.mvBusinessName{color:var(--text);background:none;border:0;text-align:left;padding:2px 0;font-size:15px;font-weight:750;min-width:0;overflow-wrap:anywhere}.mvBusinessScore{flex-shrink:0;max-width:43%;color:var(--text);background:var(--panel2);border:1px solid var(--line);padding:5px 7px;border-radius:9px;font-size:10px;line-height:1.25;text-align:center}.mvBusinessScore strong{display:block;color:var(--accent2);font-size:13px}.mvBusinessRow small{display:block;color:var(--muted);font-size:12px;margin-top:4px;overflow-wrap:anywhere}.mvBusinessSummary{display:block;text-align:left;cursor:pointer;background:none;color:inherit;border:0;padding:0;width:100%}' +
     '.mvDirectoryActions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.mvDirectoryActions button{flex:1}.mvInterestLabel{display:flex;gap:9px;align-items:center;min-height:42px;color:var(--text)}.mvInterestLabel input{accent-color:var(--accent);width:18px;height:18px}' +
     '.mvCommunityDescription{white-space:pre-wrap;overflow-wrap:anywhere}.mvCommunityForm select{width:100%}';
   document.head.appendChild(css);
@@ -85,8 +105,8 @@
 
   function details(place) {
     const address = placeText(place);
-    const destination = [place.name, address, 'Portugal'].filter(Boolean).join(', ');
-    const coords = hasCoords(place) ? place.lat + ',' + place.lon : '';
+    const destination = businessLookup(place);
+    const coords = exactCoords(place);
     const origin = directoryPosition();
     const position = positionOf(place);
     const distance = hasCoords(origin) && hasCoords(position) ? kilometers(origin,position) : null;
@@ -120,15 +140,54 @@
   }
 
   window.onDirectoryRating = function (request, data) {
+    if (data?.unavailable) ratingsUnavailable = true;
+    if (data?.rateLimited) ratingsInPeriod = 5;
+    if (listRating?.request === request) {
+      const {button} = listRating;
+      listRating = null;
+      if (button.isConnected && hasRating(data)) {
+        button.innerHTML = '<strong>★ '+ratingLabel(data)+'</strong>Google Maps';
+        button.setAttribute('aria-label',button.getAttribute('aria-label')+', '+ratingLabel(data)+' de 5, '+data.count+' avaliações');
+      }
+      loadVisibleRating();
+      return;
+    }
     const status = q('#mvBusinessRatingState');
     if (!status || status.dataset.request !== String(request)) return;
-    if (data && Number.isFinite(data.rating) && Number.isFinite(data.count)) {
-      const rating = data.rating.toLocaleString('pt-PT',{minimumFractionDigits:1,maximumFractionDigits:1});
-      status.innerHTML = '★ '+rating+' / 5 · '+data.count.toLocaleString('pt-PT')+' avaliações · <strong>Google Maps</strong>';
+    if (hasRating(data)) {
+      status.innerHTML = '★ '+ratingLabel(data)+' / 5 · '+data.count.toLocaleString('pt-PT')+' avaliações · <strong>Google Maps</strong>';
     } else {
       status.textContent = 'Nota indisponível na app. Podes consultar as avaliações no Google Maps.';
     }
   };
+
+  const hasRating = data => data && Number.isFinite(data.rating) && data.rating>=1 && data.rating<=5 && Number.isInteger(data.count) && data.count>0;
+  const ratingLabel = data => data.rating.toLocaleString('pt-PT',{minimumFractionDigits:1,maximumFractionDigits:1});
+
+  function loadVisibleRating() {
+    if (ratingsUnavailable || listRating || !state.user?.uid || !window.Android?.loadDirectoryRating) return;
+    if (Date.now()-lastRatingPeriod>=60000) {
+      lastRatingPeriod = Date.now();
+      ratingsInPeriod = 0;
+    }
+    for (let i=ratingQueue.length-1;i>=0;i--) {
+      if (!ratingQueue[i].isConnected || !ratingQueue[i].getClientRects().length) ratingQueue.splice(i,1);
+    }
+    if (!ratingQueue.length) return;
+    if (ratingsInPeriod>=5) {
+      if (ratingTimer===null) ratingTimer = setTimeout(() => {
+        ratingTimer = null;
+        loadVisibleRating();
+      }, Math.max(250,lastRatingPeriod+60000-Date.now()));
+      return;
+    }
+    const button = ratingQueue.shift();
+    const place = directory[Number(button.dataset.directoryRating)];
+    const request = ++ratingRequest;
+    listRating = {request,button};
+    ratingsInPeriod++;
+    Android.loadDirectoryRating(request,businessLookup(place),place.name,exactCoords(place));
+  }
 
   function salesLabel(place) {
     if (place.new && place.used) return 'Novas e usadas';
@@ -157,13 +216,21 @@
       (origin && sort === 'nearest' ? ' · Distância em linha reta' : directoryLookup && sort === 'nearest' ? ' · A localizar a zona…' :
         sort==='nearest' ? ' · Escolhe a tua localização para ordenar por distância' : '');
     const list = section.querySelector('.mvDirectoryList');
+    list.querySelectorAll('[data-directory-rating]').forEach(button=>ratingObserver?.unobserve(button));
     list.innerHTML = selected.length ? selected.slice(0,view.limit).map(({place,distance}, index) =>
-      '<button type="button" class="mvDirectoryCard" data-mv-business="'+index+'"><strong>'+esc(place.name)+'</strong><small>'+
+      '<article class="mvBusinessRow"><div class="mvBusinessHeading"><button type="button" class="mvBusinessName" data-mv-business="'+index+'">'+esc(place.name)+'</button>'+
+      '<button type="button" class="mvBusinessScore" data-directory-rating="'+directoryIndex.get(place)+'" aria-label="Avaliações Google Maps de '+esc(place.name)+'">Google Maps</button></div>'+
+      '<button type="button" class="mvBusinessSummary" aria-label="Ver ficha de '+esc(place.name)+'" data-mv-business="'+index+'"><small>'+
       esc([place.city || place.address,Number.isFinite(distance)?(!hasCoords(place)?'≈ ':'')+distance.toLocaleString('pt-PT',{maximumFractionDigits:1})+' km':'',place.stand?salesLabel(place):'',place.workshop?'Oficina':''].filter(Boolean).join(' · '))+
-      '</small>'+(brandsFor(place,mode).length ? '<small>'+esc(brandsFor(place,mode).join(', '))+'</small>' : '')+'</button>').join('') :
+      '</small>'+(brandsFor(place,mode).length ? '<small>'+esc(brandsFor(place,mode).join(', '))+'</small>' : '')+'</button></article>').join('') :
       '<div class="empty">Sem resultados para estes filtros.</div>';
     list.querySelectorAll('[data-mv-business]').forEach(button => {
       button.onclick = () => details(selected[Number(button.dataset.mvBusiness)].place);
+    });
+    list.querySelectorAll('[data-directory-rating]').forEach(button=>{
+      const place = directory[Number(button.dataset.directoryRating)];
+      button.onclick = () => Android.openGoogleReviews(businessLookup(place));
+      if (!ratingsUnavailable) ratingObserver?.observe(button);
     });
     section.querySelector('.mvDirectoryMore').hidden = selected.length <= view.limit;
   }
@@ -175,13 +242,15 @@
   function installDirectory(id, title, mode) {
     const section = q('#'+id);
     const entries = directory.filter(place => place[mode]);
-    const brands = [...new Set(entries.flatMap(place=>brandsFor(place,mode)))].sort(names);
+    const brands = [...new Set(entries.flatMap(place=>brandsFor(place,mode)))].filter(brand=>!leadingBrands.includes(brand)).sort(names);
+    const options = list => list.map(brand=>'<option>'+esc(brand)+'</option>').join('');
     const view = { section, entries, mode, limit:25 };
     directoryViews.set(id,view);
     section.innerHTML = '<div class="sectionHead"><h2>'+title+'</h2><button type="button" class="mvDirectoryLocation">Escolher localização</button></div>'+
       '<div class="mvDirectoryControls"><input type="search" class="mvDirectorySearch" aria-label="Pesquisar nome, marca ou localidade" placeholder="Nome, marca ou localidade">'+
       '<select class="mvDirectorySort" aria-label="Ordenar resultados"><option value="nearest">Mais próximo</option><option value="az">Nome A–Z</option></select>'+
-      '<select class="mvDirectoryBrand" aria-label="Filtrar por marca"><option value="">Todas as marcas</option>'+brands.map(brand=>'<option>'+esc(brand)+'</option>').join('')+'</select>'+
+      '<select class="mvDirectoryBrand" aria-label="'+(mode==='workshop'?'Marcas assistidas':'Marcas comercializadas')+'"><option value="">Todas as marcas</option><optgroup label="Principais marcas em Portugal">'+options(leadingBrands)+'</optgroup>'+
+      (brands.length ? '<optgroup label="Outras marcas">'+options(brands)+'</optgroup>' : '')+'</select>'+
       (mode==='stand' ? '<select class="mvDirectorySale" aria-label="Filtrar tipo de venda"><option value="">Novas e usadas</option><option value="new">Vende novas</option><option value="used">Vende usadas</option></select>' : '')+'</div>'+
       '<p class="mvDirectoryHint mvDirectoryStatus" role="status"></p><div class="mvDirectoryList"></div>'+
       '<button type="button" class="btn secondary full mvDirectoryMore" style="margin-top:10px">Ver mais</button>'+
@@ -337,6 +406,7 @@
     if (publishForm?.isConnected && q('#modalWrap').classList.contains('show')) closeModal();
     publishForm = null;
     toast('Encontro publicado.');
+    if (q('#community.active')) window.mvShowCommunityPosts?.();
     Android.loadMyMeetups();
     Android.loadMeetups();
   };
@@ -364,6 +434,7 @@
   window.mvOpenCommunityMeetup = id => {
     openMeetupFromNotification = id;
     window.go('community');
+    window.mvShowCommunityPosts?.();
   };
 
   window.onCommunityFeedFailed = () => {
@@ -390,6 +461,7 @@
     }
     installProfileEntry();
     Android.getCommunityPreferences();
+    loadVisibleRating();
   };
 
   const previousGo = window.go;

@@ -117,7 +117,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
 
 
 .photoPreviewGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px}.photoPreviewItem{position:relative;aspect-ratio:1;border-radius:12px;background:#20272d center/cover no-repeat;border:1px solid #33404a}.photoRemove{position:absolute;right:5px;top:5px;width:25px;height:25px;border:0;border-radius:50%;background:rgba(0,0,0,.72);color:#fff;font-weight:900}.verifiedBadge{display:inline-flex;align-items:center;gap:5px;background:#123b2b;color:#7ff0b1;border:1px solid #256647;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900}.optionalLabel{font-weight:500;color:var(--muted)}
-#explore .search[hidden]{display:none}
+#explore .search[hidden]{display:none}#community [hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -154,7 +154,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
       </div>
 
       <div class="homeSection">
-        <div class="homeSectionHead"><h2>Próximo evento na tua zona</h2><button onclick="go('community')">Ver todos <span>›</span></button></div>
+        <div class="homeSectionHead"><h2>Próximo evento</h2><button onclick="go('community')">Ver todos <span>›</span></button></div>
         <div class="zoneEvent">
           <div class="zoneEventDate"><span>SÁB</span><strong>31</strong><span>OUT</span></div>
           <div class="zoneEventBody"><h3>Sunset Ride — Arrábida</h3><p>⌖ Setúbal · 16:30</p><p>👥 +120 motards confirmados</p><div class="eventMiniTags"><span>Passeio</span><span>Todas as cilindradas</span><span>Convívio</span></div></div>
@@ -203,12 +203,28 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
     <section id="community" class="screen">
       <div class="headPad"><h1>Comunidade</h1><p>Encontros, eventos e rotas para motociclistas.</p></div>
       <div class="section"><div class="grid2"><button class="quick" onclick="openMeetup()"><div class="quickIcon">📍</div><strong>Publicar encontro</strong><span>Cafezadas, passeios, tours e trilhos</span></button><button class="quick" onclick="toast('Mapa de encontros — demonstração')"><div class="quickIcon">🗺️</div><strong>Mapa ao vivo</strong><span>Vê o que acontece perto de ti</span></button></div></div>
-      <div class="section"><div class="sectionHead"><h2>Perto de ti</h2><button onclick="openLocation()">Alterar zona</button></div><div class="chips"><button class="chip active">Todos</button><button class="chip">Hoje</button><button class="chip">Fim de semana</button><button class="chip">Passeios</button><button class="chip">Cafezadas</button><button class="chip">Tours EN2</button><button class="chip">Outros tours</button><button class="chip">Trilhos</button><button class="chip">Track Day</button></div></div>
-      <div class="section"><div class="cards" id="eventList">
-        <div class="eventCard"><div class="datebox"><strong>31</strong><span>Out</span></div><div class="eventText"><span class="badge demo">Demo</span><h3>Sunset Ride — Serra da Arrábida</h3><p>Setúbal · 16:30 · 74 km · Ritmo tranquilo</p><div class="meetRow"><div class="avatars"><div class="avatar">N</div><div class="avatar">F</div><div class="avatar">+18</div></div><button class="joinbtn" onclick="joinEvent(this)">Vou</button></div></div></div>
-        <div class="eventCard"><div class="datebox"><strong>01</strong><span>Nov</span></div><div class="eventText"><span class="badge demo">Demo</span><h3>Manhã Adventure — Sintra</h3><p>Sintra · 09:00 · Trail / Adventure · 112 km</p><div class="meetRow"><div class="avatars"><div class="avatar">R</div><div class="avatar">P</div><div class="avatar">+12</div></div><button class="joinbtn" onclick="joinEvent(this)">Vou</button></div></div></div>
-        <div class="eventCard"><div class="datebox"><strong>08</strong><span>Nov</span></div><div class="eventText"><span class="badge demo">Demo</span><h3>Café & Motas — Belém</h3><p>Lisboa · 10:30 · Todas as motas · Convívio</p><div class="meetRow"><div class="avatars"><div class="avatar">A</div><div class="avatar">M</div><div class="avatar">+31</div></div><button class="joinbtn" onclick="joinEvent(this)">Vou</button></div></div></div>
+      <div class="section"><div class="chips" aria-label="Vista da comunidade">
+        <button type="button" class="chip active" id="mvAgendaTab" aria-pressed="true">Agenda 2026–2027</button>
+        <button type="button" class="chip" id="mvCommunityPostsTab" aria-pressed="false">Publicações</button>
       </div></div>
+      <div class="section" id="mvAgenda">
+        <div class="mvDirectoryControls">
+          <input id="mvAgendaSearch" type="search" placeholder="Pesquisar nome ou localidade" aria-label="Pesquisar eventos">
+          <select id="mvAgendaYear" aria-label="Período">
+            <option value="next">Próximos e recorrentes</option>
+            <option value="2026">2026</option><option value="2027">2027</option>
+            <option value="recurring">Recorrentes e sem data</option>
+          </select>
+          <select id="mvAgendaType" aria-label="Tipo de evento"><option value="">Todos os tipos</option></select>
+        </div>
+        <p class="mvDirectoryHint" id="mvAgendaCount" role="status"></p>
+        <div class="mvDirectoryList" id="mvAgendaList"></div>
+        <button class="btn secondary full" type="button" id="mvAgendaMore" style="margin-top:10px">Ver mais</button>
+      </div>
+      <div id="mvCommunityPosts" hidden>
+      <div class="section"><div class="sectionHead"><h2>Perto de ti</h2><button onclick="openLocation()">Alterar zona</button></div><div class="chips"><button class="chip active">Todos</button><button class="chip">Hoje</button><button class="chip">Fim de semana</button><button class="chip">Passeios</button><button class="chip">Cafezadas</button><button class="chip">Tours EN2</button><button class="chip">Outros tours</button><button class="chip">Trilhos</button><button class="chip">Track Day</button></div></div>
+      <div class="section"><div class="cards" id="eventList"></div></div>
+      </div>
       <div class="section"><div class="sectionHead"><h2>Descobrir rotas</h2><button>Ver mapa</button></div><div class="list"><div class="listItem"><div class="listIcon">⛰️</div><div class="listMain"><h3>Arrábida panorâmica</h3><p>68 km · 1h35 · Curvas ★★★☆☆</p><div class="tagrow"><span class="tag">Asfalto</span><span class="tag">Miradouros</span><span class="tag">Café</span></div></div></div><div class="listItem"><div class="listIcon">🌊</div><div class="listMain"><h3>Costa Atlântica</h3><p>124 km · 2h40 · Curvas ★★☆☆☆</p><div class="tagrow"><span class="tag">Mar</span><span class="tag">Passeio</span><span class="tag">Todos os níveis</span></div></div></div></div></div>
     </section>
 
@@ -248,6 +264,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
 <div class="toast" id="toast"></div>
 
 <script src="directory-data.js"></script>
+<script src="community-agenda-data.js"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const state={garage:JSON.parse(localStorage.getItem('mv_garage')||'null'), maintenance:JSON.parse(localStorage.getItem('mv_maintenance')||'[]'), location:localStorage.getItem('mv_location')||'Portugal', locationCoords:null, user:JSON.parse(localStorage.getItem('mv_user')||'null'), filters:{}};

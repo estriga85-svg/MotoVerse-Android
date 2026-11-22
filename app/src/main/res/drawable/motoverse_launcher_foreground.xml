@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="27.8%"
+    android:insetRight="27.8%"
+    android:insetTop="30.1%"
+    android:insetBottom="30.1%">
+    <bitmap android:src="@drawable/motoverse_launcher_art" android:gravity="fill" android:filter="true" />
+</inset>

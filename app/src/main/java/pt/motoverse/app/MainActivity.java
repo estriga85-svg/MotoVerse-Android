@@ -561,7 +561,10 @@ public class MainActivity extends Activity {
                     byte[] body = new JSONObject().put("query", query).put("name", name).put("coordinates", coordinates)
                             .toString().getBytes(StandardCharsets.UTF_8);
                     try (OutputStream output = connection.getOutputStream()) { output.write(body); }
-                    if (connection.getResponseCode() == 200) {
+                    int response = connection.getResponseCode();
+                    if (response == 404 || response == 403) rating = new JSONObject().put("unavailable", true);
+                    else if (response == 429) rating = new JSONObject().put("rateLimited", true);
+                    else if (response == 200) {
                         try (InputStream input = connection.getInputStream()) {
                             byte[] bytes = new byte[256];
                             int length = input.read(bytes);

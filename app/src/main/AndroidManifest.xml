@@ -6,8 +6,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:allowBackup="true"
-        android:icon="@drawable/motoverse_icon"
-        android:roundIcon="@drawable/motoverse_icon"
+        android:icon="@mipmap/motoverse_launcher"
+        android:roundIcon="@mipmap/motoverse_launcher"
         android:label="MotoVerse"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false">
