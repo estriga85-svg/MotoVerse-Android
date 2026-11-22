@@ -43,22 +43,32 @@
     if(f.district&&String(x.district||'').toLowerCase()!==String(f.district).toLowerCase())return false;
     if(f.year&&Number(x.year||0)<Number(f.year))return false;
     if(f.type&&String(x.type||'').toLowerCase()!==String(f.type).toLowerCase())return false;
-    if(f.price&&Number(x.price||0)>Number(f.price))return false;
-    if(f.km&&Number(x.km||0)>Number(f.km))return false;
+    if(f.price&&(listingNumber(x.price)??Infinity)>Number(f.price))return false;
+    if(f.km&&(listingNumber(x.km)??Infinity)>Number(f.km))return false;
     if(Array.isArray(f.extras)&&f.extras.length&&f.extras.some(v=>!(x.extras||[]).includes(v)))return false;
     return true;
+  }
+  function listingNumber(value){return value==null||value===''?null:Number(value);}
+  function compareListingNumbers(a,b,direction=1){
+    if(a===null)return b===null?0:1;
+    if(b===null)return -1;
+    return (a-b)*direction;
   }
   function selectedListings(){
     const f=st()?.filters||{},search=(q('#exploreSearch')?.value||'').trim().toLocaleLowerCase('pt-PT');
     const arr=listings().filter(x=>matches(x,f,search));
-    if(order==='priceUp')arr.sort((a,b)=>Number(a.price||0)-Number(b.price||0));
-    else if(order==='priceDown')arr.sort((a,b)=>Number(b.price||0)-Number(a.price||0));
-    else if(order==='km')arr.sort((a,b)=>Number(a.km||0)-Number(b.km||0));
+    if(order==='priceUp')arr.sort((a,b)=>compareListingNumbers(listingNumber(a.price),listingNumber(b.price)));
+    else if(order==='priceDown')arr.sort((a,b)=>compareListingNumbers(listingNumber(a.price),listingNumber(b.price),-1));
+    else if(order==='km')arr.sort((a,b)=>compareListingNumbers(listingNumber(a.km),listingNumber(b.km)));
     else arr.sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
     return arr;
   }
   function photoStyle(x){const u=safePhoto((x.photos||[])[0]);return u?'background-image:url('+u+');':'background-image:none;'}
-  function price(x){return Number(x.price||0).toLocaleString('pt-PT')+' €'}
+  function price(x){return window.mvListingPrice(x);}
+  function mileage(x){
+    const km=listingNumber(x.km);
+    return km===null?'Quilómetros não indicados':km.toLocaleString('pt-PT')+' km';
+  }
   function drawMarketplace(){
     const section=q('#exploreMotas'),cards=section?.querySelector('.cards');
     if(!section||!cards)return;
@@ -82,12 +92,12 @@
     if(q('#mvSort'))q('#mvSort').value=order;
     cards.innerHTML=!marketplaceReady?'<div class="empty">A carregar anúncios aprovados...</div>':!arr.length?
       '<div class="empty">Não há anúncios aprovados para estes critérios.<div style="margin-top:12px"><button class="btn secondary" id="mvResetFilters">Limpar filtros</button></div></div>':
-      arr.map(x=>'<article class="card mvMarketCard" data-mv-listing="'+esc(x.id)+'"><div class="bikeImg" style="'+photoStyle(x)+'">'+(safePhoto((x.photos||[])[0])?'':'<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:48px">🏍</span>')+'<button class="fav" type="button" aria-label="Adicionar aos favoritos">♡</button></div><div class="cardBody"><div class="cardTitle"><h3>'+esc(x.brand)+' '+esc(x.model)+'</h3><div class="price">'+price(x)+'</div></div><div class="meta"><span>'+esc(x.year||'—')+'</span><span>'+Number(x.km||0).toLocaleString('pt-PT')+' km</span><span>'+esc(x.location||x.district||'Portugal')+'</span></div><p class="mvMiniHint">Ver detalhes e contactar vendedor</p></div></article>').join('');
+      arr.map(x=>'<article class="card mvMarketCard" data-mv-listing="'+esc(x.id)+'"><div class="bikeImg" style="'+photoStyle(x)+'">'+(safePhoto((x.photos||[])[0])?'':'<span style="position:absolute;inset:0;display:grid;place-items:center;font-size:48px">🏍</span>')+'<button class="fav" type="button" aria-label="Adicionar aos favoritos">♡</button></div><div class="cardBody"><div class="cardTitle"><h3>'+esc(x.brand)+' '+esc(x.model)+'</h3><div class="price">'+price(x)+'</div></div><div class="meta"><span>'+esc(x.year||'—')+'</span><span>'+mileage(x)+'</span><span>'+esc(x.location||x.district||'Portugal')+'</span></div><p class="mvMiniHint">Ver detalhes e contactar vendedor</p></div></article>').join('');
     if(q('#mvResetFilters'))q('#mvResetFilters').onclick=()=>{st().filters={};if(q('#exploreSearch'))q('#exploreSearch').value='';drawMarketplace()};
     const featured=q('.featureScroll'),homeSection=featured?.closest('.homeSection');
     if(featured){
       const recent=listings().sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).slice(0,4);
-      featured.innerHTML=!marketplaceReady?'<div class="mvMuted">A carregar...</div>':!recent.length?'<div class="mvMuted">Ainda não existem anúncios aprovados. Publica a tua mota para começar.</div>':recent.map(x=>'<article class="featureBike" data-mv-listing="'+esc(x.id)+'"><div class="featureBikeImg" style="'+photoStyle(x)+'background-size:contain;background-repeat:no-repeat;background-color:#0e1318"><button class="featureFav" type="button" aria-label="Favorito">♡</button></div><div class="featureBikeBody"><h3>'+esc(x.brand)+' '+esc(x.model)+'</h3><div class="featurePrice">'+price(x)+'</div><div class="featureMeta"><span>'+esc(x.year||'—')+'</span><span>'+Number(x.km||0).toLocaleString('pt-PT')+' km</span><span>'+esc(x.district||'Portugal')+'</span></div></div></article>').join('');
+      featured.innerHTML=!marketplaceReady?'<div class="mvMuted">A carregar...</div>':!recent.length?'<div class="mvMuted">Ainda não existem anúncios aprovados. Publica a tua mota para começar.</div>':recent.map(x=>'<article class="featureBike" data-mv-listing="'+esc(x.id)+'"><div class="featureBikeImg" style="'+photoStyle(x)+'background-size:contain;background-repeat:no-repeat;background-color:#0e1318"><button class="featureFav" type="button" aria-label="Favorito">♡</button></div><div class="featureBikeBody"><h3>'+esc(x.brand)+' '+esc(x.model)+'</h3><div class="featurePrice">'+price(x)+'</div><div class="featureMeta"><span>'+esc(x.year||'—')+'</span><span>'+mileage(x)+'</span><span>'+esc(x.district||'Portugal')+'</span></div></div></article>').join('');
       if(homeSection)homeSection.dataset.mvRealData='true';
     }
   }
@@ -98,10 +108,10 @@
     const images=(Array.isArray(x.photos)?x.photos:[]).map(safePhoto).filter(Boolean);
     const gallery=images.length?'<div class="mvGallery">'+images.map(src=>'<img src="'+esc(src)+'" alt="Fotografia da mota">').join('')+'</div>':'<div class="empty">Fotografias não disponíveis</div>';
     const extras=Array.isArray(x.extras)&&x.extras.length?'<p class="mvInfo"><strong>Extras:</strong> '+esc(x.extras.join(' · '))+'</p>':'';
-    window.openModal('<h2>'+esc(x.brand)+' '+esc(x.model)+'</h2>'+gallery+'<h2 style="color:var(--accent2);margin-top:13px">'+price(x)+'</h2><p class="mvInfo">'+esc(x.year||'Ano não indicado')+' · '+Number(x.km||0).toLocaleString('pt-PT')+' km · '+esc(x.location||'Local não indicado')+'</p>'+extras+'<div class="mvToolBox" style="margin:12px 0"><h3>Descrição do vendedor</h3><p style="white-space:pre-wrap">'+esc(x.desc||'Sem descrição adicional.')+'</p><p>Vendedor: '+esc(x.ownerName||'Utilizador MotoVerse')+'</p></div><button class="btn primary full" id="mvContactSeller">💬 Contactar vendedor</button><div class="mvToolGrid" style="margin-top:9px"><button class="mvToolBtn" id="mvCheckBike">✓ Verificar mota</button><button class="mvToolBtn" id="mvShareBike">↗ Partilhar detalhes</button><button class="mvToolBtn" id="mvSafetyAdvice">🛡 Compra segura</button><button class="mvToolBtn" id="mvReportBike">⚑ Denunciar por e-mail</button></div><p class="mvMiniHint" style="margin-top:12px">A MotoVerse não recebe pagamentos nem garante o estado mecânico dos veículos.</p>');
+    window.openModal('<h2>'+esc(x.brand)+' '+esc(x.model)+'</h2>'+gallery+'<h2 style="color:var(--accent2);margin-top:13px">'+price(x)+'</h2><p class="mvInfo">'+esc(x.year||'Ano não indicado')+' · '+mileage(x)+' · '+esc(x.location||'Local não indicado')+'</p>'+extras+'<div class="mvToolBox" style="margin:12px 0"><h3>Descrição do vendedor</h3><p style="white-space:pre-wrap">'+esc(x.desc||'Sem descrição adicional.')+'</p><p>Vendedor: '+esc(x.ownerName||'Utilizador MotoVerse')+'</p></div><button class="btn primary full" id="mvContactSeller">💬 Contactar vendedor</button><div class="mvToolGrid" style="margin-top:9px"><button class="mvToolBtn" id="mvCheckBike">✓ Verificar mota</button><button class="mvToolBtn" id="mvShareBike">↗ Partilhar detalhes</button><button class="mvToolBtn" id="mvSafetyAdvice">🛡 Compra segura</button><button class="mvToolBtn" id="mvReportBike">⚑ Denunciar por e-mail</button></div><p class="mvMiniHint" style="margin-top:12px">A MotoVerse não recebe pagamentos nem garante o estado mecânico dos veículos.</p>');
     q('#mvContactSeller').onclick=()=>{if(!x.ownerUid)return notice('O vendedor não tem contacto disponível.');window.contactSeller(id,x.ownerUid,x.ownerName||'vendedor')};
     q('#mvCheckBike').onclick=()=>openChecklist(id);
-    q('#mvShareBike').onclick=()=>{const text=[x.brand+' '+x.model,price(x),Number(x.km||0).toLocaleString('pt-PT')+' km',x.location||'',x.desc||'','Encontrado na MotoVerse.'].filter(Boolean).join('\n');if(window.Android?.shareText)Android.shareText('Anúncio MotoVerse',text);else notice('Partilha indisponível nesta versão.')};
+    q('#mvShareBike').onclick=()=>{const text=[x.brand+' '+x.model,price(x),mileage(x),x.location||'',x.desc||'','Encontrado na MotoVerse.'].filter(Boolean).join('\n');if(window.Android?.shareText)Android.shareText('Anúncio MotoVerse',text);else notice('Partilha indisponível nesta versão.')};
     q('#mvSafetyAdvice').onclick=openSafety;
     q('#mvReportBike').onclick=()=>{if(window.Android?.reportListing)Android.reportListing(id,x.brand+' '+x.model);else notice('Denúncia por e-mail indisponível.')};
   }

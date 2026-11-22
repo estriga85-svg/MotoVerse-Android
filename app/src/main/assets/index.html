@@ -385,7 +385,42 @@ window.__sellPhotos=[];
 function previewSellPhotos(input){let files=[...(input.files||[])].slice(0,6);if(!files.length)return;window.__sellPhotos=[];let pending=files.length;files.forEach(f=>{let r=new FileReader();r.onload=e=>{let img=new Image();img.onload=()=>{let max=1200,scale=Math.min(1,max/Math.max(img.width,img.height)),cv=document.createElement('canvas');cv.width=Math.round(img.width*scale);cv.height=Math.round(img.height*scale);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);window.__sellPhotos.push(cv.toDataURL('image/jpeg',.78));if(--pending===0)renderSellPhotos()};img.src=e.target.result};r.readAsDataURL(f)})}
 function renderSellPhotos(){let box=$('#sellPhotoGrid');if(!box)return;box.innerHTML=window.__sellPhotos.map((src,i)=>`<div class="photoPreviewItem" style="background-image:url('${src}')"><button class="photoRemove" type="button" onclick="removeSellPhoto(${i})">×</button></div>`).join('');let t=$('#sellPhotoThumb');if(t&&window.__sellPhotos[0]){t.style.backgroundImage=`url(${window.__sellPhotos[0]})`;t.textContent=''}}
 function removeSellPhoto(i){window.__sellPhotos.splice(i,1);renderSellPhotos()}
-function openSell(){window.__sellPhotos=[];openModal(`<h2>Publicar uma mota</h2><div class="notice">Preenche os dados do anúncio. Distrito é obrigatório; concelho é opcional.</div><div class="two"><div class="field"><label>Marca</label><select id="sBrand">${brandOptions()}</select></div><div class="field"><label>Modelo</label><select id="sModel"><option>Escolher modelo</option></select></div></div><div class="two"><div class="field"><label>Ano</label><select id="sYear">${yearOptions()}</select></div><div class="field"><label>Tipo</label><select id="sType"><option value="">Escolher</option>${bikeTypes.map(x=>`<option>${x}</option>`).join('')}</select></div></div><div class="two"><div class="field"><label>Quilómetros</label><input id="sKm" type="number" placeholder="4100"></div><div class="field"><label>Preço (€)</label><input id="sPrice" type="number" placeholder="8750"></div></div><div class="two"><div class="field"><label>Distrito</label><select id="sDistrict" onchange="updateCounty()">${districtOptions()}</select></div><div class="field"><label>Concelho <span class="optionalLabel">(opcional)</span></label><select id="sCounty"><option value="">Escolhe primeiro o distrito</option></select></div></div><div class="field"><label>Fotografias (até 6)</label><label class="photoPicker"><div class="photoThumb" id="sellPhotoThumb">📷</div><div><strong>Adicionar fotografias</strong><div class="catalogNote">Galeria do telemóvel/PC · a primeira será a capa.</div></div><input id="sellPhotos" type="file" accept="image/*" multiple hidden onchange="previewSellPhotos(this)"></label><div id="sellPhotoGrid" class="photoPreviewGrid"></div></div><div class="subhead">Estado e extras</div>${extrasHtml([])}<div class="field"><label>Descrição</label><textarea id="sDesc" placeholder="Estado geral, utilização, detalhes importantes..."></textarea></div><button class="btn primary full" style="margin-top:12px" onclick="saveListingDraft()">Guardar anúncio</button>`);bindCatalog('sBrand','sModel')}
+function openSell(){
+  window.__sellPhotos=[];
+  openModal(`
+    <h2>Publicar uma mota</h2>
+    <div class="notice">Escolhe a marca, o modelo e o distrito. Podes deixar o preço e os quilómetros em branco.</div>
+    <div class="two">
+      <div class="field"><label for="sBrand">Marca</label><select id="sBrand">${brandOptions()}</select></div>
+      <div class="field"><label for="sModel">Modelo</label><select id="sModel"><option value="">Escolher modelo</option></select></div>
+    </div>
+    <div class="two">
+      <div class="field"><label for="sYear">Ano</label><select id="sYear">${yearOptions()}</select></div>
+      <div class="field"><label for="sType">Tipo</label><select id="sType"><option value="">Escolher</option>${bikeTypes.map(x=>`<option>${x}</option>`).join('')}</select></div>
+    </div>
+    <div class="two">
+      <div class="field"><label for="sKm">Quilómetros</label><input id="sKm" type="number" inputmode="numeric" min="0" step="1"></div>
+      <div class="field"><label for="sPrice">Preço (€)</label><input id="sPrice" type="number" inputmode="decimal" min="0" step="0.01"></div>
+    </div>
+    <div id="sNegotiableWrap"><label><input id="sNegotiable" type="checkbox"> <span>Preço negociável</span></label></div>
+    <div class="two">
+      <div class="field"><label for="sDistrict">Distrito</label><select id="sDistrict" onchange="updateCounty()">${districtOptions()}</select></div>
+      <div class="field"><label for="sCounty">Concelho <span class="optionalLabel">(opcional)</span></label><select id="sCounty"><option value="">Escolhe primeiro o distrito</option></select></div>
+    </div>
+    <div class="field">
+      <label class="photoPicker">
+        <div class="photoThumb" id="sellPhotoThumb" aria-hidden="true">📷</div>
+        <div><strong>Adicionar fotografias</strong><div class="catalogNote" id="sellPhotoCount" aria-live="polite">0 de 6 fotografias</div></div>
+        <input id="sellPhotos" type="file" accept="image/*" multiple hidden onchange="previewSellPhotos(this)">
+      </label>
+      <div id="sellPhotoGrid" class="photoPreviewGrid"></div>
+    </div>
+    <div class="subhead">Estado e extras</div>${extrasHtml([])}
+    <div class="field"><label for="sDesc">Descrição</label><textarea id="sDesc" placeholder="Estado geral, utilização, detalhes importantes..."></textarea></div>
+    <button class="btn primary full" style="margin-top:12px" onclick="saveListingDraft()">Guardar anúncio</button>
+  `);
+  bindCatalog('sBrand','sModel');
+}
 function saveListingDraft(){let brand=$('#sBrand').value,model=$('#sModel').value,district=$('#sDistrict').value;if(!brand||!model)return toast('Escolhe marca e modelo');if(!district)return toast('Escolhe o distrito');let extras=$$('.extraCheck:checked').map(x=>x.value);let draft={brand,model,year:$('#sYear').value,type:$('#sType').value,km:Number($('#sKm').value||0),price:Number($('#sPrice').value||0),district,county:$('#sCounty').value,location:[$('#sCounty').value,district].filter(Boolean).join(', '),photos:window.__sellPhotos||[],extras,desc:$('#sDesc').value};try{localStorage.setItem('mv_listing_draft',JSON.stringify(draft))}catch(e){return toast('As fotos são demasiado grandes. Tenta menos imagens.')}closeModal();toast(`Anúncio guardado · ${draft.photos.length} foto(s)`)}
 function openMeetup(){let verified=!!(state.user&&state.user.verified);openModal(`<h2>Criar ponto de encontro</h2><div class="notice">${verified?'<span class="verifiedBadge">✓ Utilizador verificado</span> O teu selo será mostrado no encontro.':'O organizador será identificado pela conta MotoVerse. Contas verificadas recebem um selo visível.'}</div><div class="field"><label>Nome</label><input id="meetName" placeholder="Ex.: Volta pela Arrábida"></div><div class="field"><label>Local</label><input id="meetLoc" placeholder="Ex.: Setúbal"></div><div class="two"><div class="field"><label>Data</label><input id="meetDate" type="date"></div><div class="field"><label>Hora</label><input id="meetTime" type="time"></div></div><div class="field"><label>Tipo</label><select id="meetType"><option>Passeio</option><option>Convívio</option><option>Adventure</option><option>Track Day</option><option>Beneficência</option></select></div><button class="btn primary full" onclick="createMeetup()">Criar encontro</button>`) }
 function createMeetup(){let n=$('#meetName').value.trim(),l=$('#meetLoc').value.trim(),d=$('#meetDate').value;if(!n||!l||!d)return toast('Preenche nome, local e data');let dt=new Date(d+'T12:00:00'),day=String(dt.getDate()).padStart(2,'0'),mon=dt.toLocaleDateString('pt-PT',{month:'short'}).replace('.',''),verified=!!(state.user&&state.user.verified),organizer=(state.user&&state.user.name)||'Utilizador MotoVerse';let div=document.createElement('div');div.className='eventCard';div.innerHTML=`<div class="datebox"><strong>${day}</strong><span>${mon}</span></div><div class="eventText">${verified?'<span class="verifiedBadge">✓ Organizador verificado</span>':'<span class="badge live">Organizador</span>'}<h3>${escapeHtml(n)}</h3><p>${escapeHtml(l)} · ${$('#meetTime').value||'Hora a definir'} · ${escapeHtml($('#meetType').value)}</p><p style="margin-top:5px">Criado por ${escapeHtml(organizer)}</p><div class="meetRow"><div class="avatars"><div class="avatar">Tu</div></div><button class="joinbtn">Organizador</button></div></div>`;$('#eventList').prepend(div);closeModal();toast('Encontro criado')}

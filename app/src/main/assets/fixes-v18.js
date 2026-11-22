@@ -4,7 +4,7 @@
   const st=document.createElement('style');
   st.textContent=`
     #sNegotiableWrap,#sNegotiableWrap.field{margin:2px 0 8px!important;background:transparent!important;border:0!important;box-shadow:none!important;padding:0!important}
-    #sNegotiableWrap label{background:transparent!important;border:0!important;color:#27323a!important;padding:4px 0!important;min-height:auto!important;font-size:13px!important;box-shadow:none!important}
+    #sNegotiableWrap label{background:transparent!important;border:0!important;color:var(--text)!important;padding:4px 0!important;min-height:auto!important;font-size:13px!important;box-shadow:none!important}
     #sNegotiableWrap input{background:transparent!important;box-shadow:none!important}
     .bottom{bottom:0!important;margin-bottom:0!important}
     .app{padding-bottom:104px!important}
@@ -28,7 +28,7 @@
         wrap.style.border='0';
         wrap.style.boxShadow='none';
         const lab=wrap.querySelector('label');
-        if(lab){lab.style.background='transparent';lab.style.border='0';lab.style.color='#27323a';lab.style.boxShadow='none';}
+        if(lab){lab.style.background='transparent';lab.style.border='0';lab.style.boxShadow='none';}
       }
     },0);
   };

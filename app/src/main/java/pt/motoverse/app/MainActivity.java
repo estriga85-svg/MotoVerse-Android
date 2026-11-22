@@ -131,6 +131,9 @@ public class MainActivity extends Activity {
     private void loadFirebaseBridge(){try(InputStream in=getAssets().open("firebase-bridge.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);String js=out.toString(StandardCharsets.UTF_8.name());webView.evaluateJavascript(js,v->{pageReady=true;pushAuthStateToWeb();});}catch(Exception e){pageReady=true;sendError("Não foi possível carregar a ligação à conta.");}}
     private void runJs(String js){if(webView!=null)runOnUiThread(()->webView.evaluateJavascript(js,null));}
     private void sendError(String m){JSONObject o=new JSONObject();try{o.put("message",m==null?"Erro inesperado":m);}catch(Exception ignored){}runJs("window.onNativeError&&window.onNativeError("+o+");");}
+    private void sendListingError(String message) {
+        runJs("window.onListingSaveError&&window.onListingSaveError(" + JSONObject.quote(message) + ");");
+    }
 
     private boolean isAdmin(FirebaseUser u){return u!=null&&u.isEmailVerified()&&u.getEmail()!=null&&ADMIN_EMAIL.equalsIgnoreCase(u.getEmail());}
 
@@ -176,7 +179,29 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void logout(){auth.signOut();googleClient.signOut();pushAuthStateToWeb();}
         @JavascriptInterface public void saveGarage(String json){FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão para guardar a tua garagem.");return;}try{Map<String,Object>d=jsonToMap(new JSONObject(json));d.remove("updatedAt");d.put("ownerUid",u.getUid());Map<String,Object>x=new HashMap<>();x.put("garage",d);x.put("garageUpdatedAt",FieldValue.serverTimestamp());db.collection("users").document(u.getUid()).set(x,SetOptions.merge()).addOnSuccessListener(v->runJs("window.onGarageSaved&&window.onGarageSaved();")).addOnFailureListener(e->sendError("Não foi possível guardar a mota: "+(e.getLocalizedMessage()==null?"erro de permissões":e.getLocalizedMessage())));}catch(Exception e){sendError("Dados da mota inválidos.");}}
         @JavascriptInterface public void loadGarage(){FirebaseUser u=auth.getCurrentUser();if(u!=null)loadGarageForUser(u);}
-        @JavascriptInterface public void saveListing(String json){FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão antes de publicar um anúncio.");return;}try{Map<String,Object>d=jsonToMap(new JSONObject(json));d.put("ownerUid",u.getUid());d.put("ownerEmail",u.getEmail()==null?"":u.getEmail());d.put("ownerName",u.getDisplayName()==null?"Motociclista":u.getDisplayName());d.put("status","pending");d.put("createdAt",FieldValue.serverTimestamp());d.put("updatedAt",FieldValue.serverTimestamp());db.collection("listings").add(d).addOnSuccessListener(ref->{sendPendingAlert(ref.getId(),u);runJs("window.onListingSaved&&window.onListingSaved("+JSONObject.quote(ref.getId())+");");if(isAdmin(u))loadPendingCountForAdmin();}).addOnFailureListener(e->sendError("Não foi possível guardar o anúncio: "+e.getLocalizedMessage()));}catch(Exception e){sendError("Dados do anúncio inválidos.");}}
+        @JavascriptInterface public void saveListing(String json) {
+            FirebaseUser u = auth.getCurrentUser();
+            if (u == null) {
+                sendListingError("Inicia sessão antes de publicar um anúncio.");
+                return;
+            }
+            try {
+                Map<String, Object> listing = jsonToMap(new JSONObject(json));
+                listing.put("ownerUid", u.getUid());
+                listing.put("ownerEmail", u.getEmail() == null ? "" : u.getEmail());
+                listing.put("ownerName", u.getDisplayName() == null ? "Motociclista" : u.getDisplayName());
+                listing.put("status", "pending");
+                listing.put("createdAt", FieldValue.serverTimestamp());
+                listing.put("updatedAt", FieldValue.serverTimestamp());
+                db.collection("listings").add(listing).addOnSuccessListener(ref -> {
+                    sendPendingAlert(ref.getId(), u);
+                    runJs("window.onListingSaved&&window.onListingSaved(" + JSONObject.quote(ref.getId()) + ");");
+                    if (isAdmin(u)) loadPendingCountForAdmin();
+                }).addOnFailureListener(error -> sendListingError("Não foi possível guardar o anúncio: " + error.getLocalizedMessage()));
+            } catch (Exception error) {
+                sendListingError("Dados do anúncio inválidos.");
+            }
+        }
         @JavascriptInterface public void loadMyListings(){FirebaseUser u=auth.getCurrentUser();if(u==null)return;db.collection("listings").whereEqualTo("ownerUid",u.getUid()).get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onMyListings&&window.onMyListings("+a+");");});}
         @JavascriptInterface public void loadApprovedListings(){db.collection("listings").whereEqualTo("status","approved").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onApprovedListings&&window.onApprovedListings("+a+");");}).addOnFailureListener(e->runJs("window.onApprovedListingsFailed&&window.onApprovedListingsFailed();"));}
         @JavascriptInterface public void loadPendingListingsAdmin(){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Área reservada ao revisor.");return;}db.collection("listings").whereEqualTo("status","pending").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onPendingListings&&window.onPendingListings("+a+");window.onPendingCount&&window.onPendingCount("+s.size()+");");});}
