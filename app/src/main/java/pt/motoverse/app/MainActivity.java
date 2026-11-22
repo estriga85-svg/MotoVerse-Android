@@ -2,12 +2,17 @@ package pt.motoverse.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Insets;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -17,6 +22,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.core.location.LocationManagerCompat;
+import androidx.core.os.CancellationSignal;
 import androidx.work.Constraints;
 import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
@@ -65,6 +72,8 @@ public class MainActivity extends Activity {
     private static final int GOOGLE_SIGN_IN_REQUEST = 1002;
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1003;
     private static final int CSV_EXPORT_REQUEST = 1004;
+    private static final int LOCATION_PERMISSION_REQUEST = 1005;
+    private static final String APP_PAGE = "file:///android_asset/index.html";
     private static final String ADMIN_EMAIL = "estriga85@gmail.com";
 
     private WebView webView;
@@ -75,6 +84,11 @@ public class MainActivity extends Activity {
     private boolean pageReady = false;
     private String pendingExportCsv = null;
     private boolean openAdminReviewOnReady = false;
+    private final Handler locationHandler = new Handler(Looper.getMainLooper());
+    private final Runnable locationTimeout = () -> finishLocation(null, "unavailable");
+    private final List<CancellationSignal> locationSignals = new ArrayList<>();
+    private boolean askingForLocationPermission;
+    private int locationRequestId;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -124,7 +138,84 @@ public class MainActivity extends Activity {
             }
         });
         auth.addAuthStateListener(a->{if(pageReady)pushAuthStateToWeb();});
-        webView.loadUrl("file:///android_asset/index.html");
+        webView.loadUrl(APP_PAGE);
+    }
+
+    private boolean hasLocationPermission(String permission) {
+        return checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestDeviceLocation(int requestId) {
+        if (isDestroyed() || !APP_PAGE.equals(webView.getUrl())) return;
+        locationRequestId = requestId;
+        if (askingForLocationPermission || !locationSignals.isEmpty()) return;
+        if (hasLocationPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                || hasLocationPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            readDeviceLocation();
+            return;
+        }
+        askingForLocationPermission = true;
+        requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION}, LOCATION_PERMISSION_REQUEST);
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode != LOCATION_PERMISSION_REQUEST) return;
+        askingForLocationPermission = false;
+        if (hasLocationPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
+                || hasLocationPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            readDeviceLocation();
+        } else {
+            finishLocation(null, "denied");
+        }
+    }
+
+    @SuppressWarnings("MissingPermission")
+    private void readDeviceLocation() {
+        LocationManager manager = getSystemService(LocationManager.class);
+        if (manager == null || !LocationManagerCompat.isLocationEnabled(manager)) {
+            finishLocation(null, "disabled");
+            return;
+        }
+        List<String> providers = manager.getProviders(true);
+        boolean precise = hasLocationPermission(Manifest.permission.ACCESS_FINE_LOCATION);
+        for (String provider : new String[]{"fused", LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER}) {
+            if (!providers.contains(provider) || (!precise && LocationManager.GPS_PROVIDER.equals(provider))) continue;
+            CancellationSignal signal = new CancellationSignal();
+            try {
+                LocationManagerCompat.getCurrentLocation(manager, provider, signal, locationHandler::post, location -> {
+                    if (!locationSignals.contains(signal)) return;
+                    locationSignals.remove(signal);
+                    if (location != null) finishLocation(location, null);
+                    else if (locationSignals.isEmpty()) finishLocation(null, "unavailable");
+                });
+                locationSignals.add(signal);
+            } catch (IllegalArgumentException | SecurityException ignored) {
+                // A provider can disappear or lose permission while the request is starting.
+            }
+        }
+        if (locationSignals.isEmpty()) finishLocation(null, "unavailable");
+        else locationHandler.postDelayed(locationTimeout, 18000);
+    }
+
+    private void stopLocationRequest() {
+        locationHandler.removeCallbacks(locationTimeout);
+        for (CancellationSignal signal : locationSignals) signal.cancel();
+        locationSignals.clear();
+    }
+
+    private void finishLocation(Location location, String error) {
+        stopLocationRequest();
+        if (isDestroyed() || !APP_PAGE.equals(webView.getUrl())) return;
+        String result = location == null ? "null," + JSONObject.quote(error)
+                : "{lat:" + location.getLatitude() + ",lon:" + location.getLongitude() + "},null";
+        runJs("window.onDeviceLocation&&window.onDeviceLocation(" + locationRequestId + "," + result + ");");
+    }
+
+    @Override protected void onDestroy() {
+        stopLocationRequest();
+        super.onDestroy();
     }
 
     private void applyMotoVerseFixes(){String js="(function(){var st=document.createElement('style');st.textContent='.modalWrap{padding-bottom:20px!important;box-sizing:border-box!important}.modal{max-height:calc(100dvh - 44px)!important;padding-bottom:36px!important}.photoThumb,.garagePhoto,.homeGaragePhoto{background-size:contain!important;background-position:center!important;background-repeat:no-repeat!important}';document.head.appendChild(st)})();";webView.evaluateJavascript(js,null);}
@@ -233,13 +324,28 @@ public class MainActivity extends Activity {
             });
         }
         @JavascriptInterface public void openMapSearch(String query){
+            openMapSearchAt(query, "0,0", query);
+        }
+        @JavascriptInterface public void openNearbyMapSearch(String query, double latitude, double longitude) {
+            if (query == null || !Double.isFinite(latitude) || !Double.isFinite(longitude)
+                    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return;
+            openMapSearchAt(query, latitude + "," + longitude, query + " perto de mim");
+        }
+        @JavascriptInterface public void useDeviceLocation(int requestId) {
+            runOnUiThread(() -> requestDeviceLocation(requestId));
+        }
+        private void openMapSearchAt(String query, String centre, String webQuery) {
             if(query==null||query.trim().isEmpty())return;
             runOnUiThread(()->{
                 try{
                     String safe=query.substring(0,Math.min(query.length(),180));
-                    Intent geo=new Intent(Intent.ACTION_VIEW,Uri.parse("geo:0,0?q="+Uri.encode(safe)));
-                    if(geo.resolveActivity(getPackageManager())!=null)startActivity(geo);
-                    else startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.google.com/maps/search/?api=1&query="+Uri.encode(safe))));
+                    Intent geo=new Intent(Intent.ACTION_VIEW,Uri.parse("geo:"+centre+"?q="+Uri.encode(safe)));
+                    try {
+                        startActivity(geo);
+                    } catch (ActivityNotFoundException e) {
+                        String fallback=webQuery.substring(0,Math.min(webQuery.length(),180));
+                        startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://www.google.com/maps/search/?api=1&query="+Uri.encode(fallback))));
+                    }
                 }catch(Exception e){sendError("Não foi possível abrir a pesquisa de serviços.");}
             });
         }

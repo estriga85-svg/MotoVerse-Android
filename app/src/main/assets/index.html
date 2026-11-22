@@ -2,6 +2,7 @@
 <html lang="pt-PT">
 <head>
 <meta charset="utf-8"/>
+<meta http-equiv="Content-Security-Policy" content="frame-src 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#0a0d10"/>
 <title>MotoVerse — Dark / Light</title>
@@ -18,8 +19,8 @@
 /* ===== MotoVerse Sport Home v3 ===== */
 :root{--sport-orange:#ff641e;--sport-orange-2:#ff8f45;--sport-card:#11161a;--sport-card-2:#171d21;--sport-stroke:rgba(255,255,255,.085)}
 .top{padding:13px 16px 11px;background:linear-gradient(180deg,rgba(8,11,13,.98),rgba(8,11,13,.88));border-bottom:1px solid rgba(255,255,255,.035)}
-.brand{font-style:italic;letter-spacing:-1.2px;font-size:24px}.brandmark{width:36px;height:36px;border-radius:11px;transform:skew(-5deg);box-shadow:0 8px 25px rgba(255,91,28,.2)}
-.brandmark svg{transform:skew(5deg)}.accountMini{border-radius:50%;width:38px;height:38px;background:linear-gradient(145deg,#20272c,#111518);border-color:#343e45}.locbtn{border-radius:999px;padding:8px 11px;background:#11171b;border-color:#222b31}
+.brand{font-style:italic;letter-spacing:-1px;font-size:clamp(16px,5.6vw,24px);gap:6px;white-space:nowrap}.brandLogo{width:clamp(36px,12vw,49px);height:auto;border-radius:9px;flex:none}.topActions{min-width:0}.topActions>button{flex:none}.topActions>.locbtn{flex:0 1 auto;min-width:0}#locationLabel{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.accountMini{border-radius:50%;width:38px;height:38px;background:linear-gradient(145deg,#20272c,#111518);border-color:#343e45}.locbtn{border-radius:999px;padding:8px 11px;background:#11171b;border-color:#222b31}
 #home{padding-top:0}.homeSearch{margin:14px 16px 12px}.homeSearch .searchbox{height:52px;border-radius:16px;background:linear-gradient(145deg,#171d22,#11161a);border-color:#2b353c;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}.homeSearch .filterbtn{height:52px;border-radius:16px}
 .homeHero{padding:0 16px 5px}.homeHeroCard{position:relative;min-height:292px;border-radius:25px;overflow:hidden;border:1px solid rgba(255,255,255,.13);box-shadow:0 25px 60px rgba(0,0,0,.42);background-image:linear-gradient(90deg,rgba(5,8,10,.92) 0%,rgba(7,10,12,.72) 42%,rgba(7,9,10,.1) 78%),linear-gradient(180deg,transparent 58%,rgba(2,4,5,.58)),url('https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=1200&q=88');background-size:cover;background-position:center}
 .homeHeroCard:before{content:"";position:absolute;inset:auto 0 0;height:4px;background:linear-gradient(90deg,var(--sport-orange),var(--sport-orange-2),transparent 72%)}.homeHeroContent{position:absolute;z-index:2;inset:0;padding:24px 22px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start}.homeHeroKicker{font-size:9px;font-weight:900;letter-spacing:2px;color:#d6dde2;text-transform:uppercase;margin-bottom:10px}.homeHeroTitle{margin:0;max-width:290px;font-size:31px;line-height:.98;letter-spacing:-1.3px;text-shadow:0 2px 18px rgba(0,0,0,.55)}.homeHeroTitle em{font-style:normal;color:var(--sport-orange)}.homeHeroSub{margin:11px 0 14px;max-width:270px;color:#d1d7db;font-size:12px;line-height:1.45}.homeHeroCta{border:0;border-radius:14px;background:linear-gradient(135deg,var(--sport-orange),var(--sport-orange-2));color:#fff;font-weight:900;padding:12px 15px;box-shadow:0 12px 26px rgba(255,97,28,.28)}.heroDots{position:absolute;bottom:11px;left:50%;transform:translateX(-50%);display:flex;gap:5px}.heroDots i{width:6px;height:6px;border-radius:99px;background:rgba(255,255,255,.25)}.heroDots i:first-child{background:var(--sport-orange);width:16px}
@@ -122,7 +123,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
 <div class="app">
   <header class="top">
     <div class="toprow">
-      <div class="brand"><div class="brandmark"><svg viewBox="0 0 24 24" fill="none"><path d="M3 15.2c1.9-4.8 5.8-7.1 11.3-6.8l2.2-2.5h2.4l-2.1 3.2c2 .7 3.4 1.9 4.2 3.7" stroke="white" stroke-width="1.8" stroke-linecap="round"/><circle cx="6" cy="16.5" r="3" stroke="white" stroke-width="1.8"/><circle cx="18" cy="16.5" r="3" stroke="white" stroke-width="1.8"/><path d="M8.7 16.5h6.2l-3-5.1H8.2" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg></div>MotoVerse</div>
+      <div class="brand"><img class="brandLogo" src="motoverse_logo.jpg" alt="" width="49" height="44">MotoVerse</div>
       <div class="topActions"><button class="locbtn" onclick="openLocation()">⌖ <span id="locationLabel">Portugal</span></button><button class="themeToggle" id="themeToggle" onclick="toggleTheme()" aria-label="Mudar aspeto" title="Mudar entre Dark e Light">☀</button><button class="accountMini" onclick="go('profile')" aria-label="Perfil">◉</button></div>
     </div>
   </header>
@@ -247,7 +248,8 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={garage:JSON.parse(localStorage.getItem('mv_garage')||'null'), maintenance:JSON.parse(localStorage.getItem('mv_maintenance')||'[]'), location:localStorage.getItem('mv_location')||'Portugal', user:JSON.parse(localStorage.getItem('mv_user')||'null'), filters:{}};
+const state={garage:JSON.parse(localStorage.getItem('mv_garage')||'null'), maintenance:JSON.parse(localStorage.getItem('mv_maintenance')||'[]'), location:localStorage.getItem('mv_location')||'Portugal', locationCoords:null, user:JSON.parse(localStorage.getItem('mv_user')||'null'), filters:{}};
+if(state.location==='Perto de mim')state.location='Portugal';
 $('#locationLabel').textContent=state.location;
 
 function syncThemeUI(){
@@ -311,51 +313,81 @@ function toast(msg){let t=$('#toast');t.textContent=msg;t.classList.add('show');
 function openModal(html){$('#modalContent').innerHTML=html;$('#modalWrap').classList.add('show')}
 function closeModal(){$('#modalWrap').classList.remove('show')}
 function openScreenModal(title,text){openModal(`<h2>${title}</h2><div class="notice">${text}</div><button class="btn primary full" style="margin-top:13px" onclick="closeModal()">Entendido</button>`)}
-function openLocation(){openModal(`<h2>Escolher localização</h2><div class="field"><label>Distrito / cidade</label><input id="locInput" value="${state.location==='Portugal'?'':state.location}" placeholder="Ex.: Lisboa, Setúbal, Porto"></div><button class="btn primary full" onclick="saveLocation()">Usar esta zona</button><button class="btn secondary full" style="margin-top:8px" onclick="useGeo()">Usar localização do telemóvel</button><p class="muted" style="font-size:10px;line-height:1.5">Na versão final, a localização serve para ordenar oficinas, eventos, pontos de encontro e anúncios por distância.</p>`)}
-function saveLocation(){let v=$('#locInput').value.trim()||'Portugal';state.location=v;localStorage.setItem('mv_location',v);$('#locationLabel').textContent=v;closeModal();toast('Zona atualizada')}
-function useGeo(){if(!navigator.geolocation)return toast('Localização não suportada');navigator.geolocation.getCurrentPosition(p=>{state.location='Perto de mim';localStorage.setItem('mv_location',state.location);$('#locationLabel').textContent=state.location;
+let locationRequestId=0;
 
-const bikeCatalog={
-"Aprilia":["RS 125","RS 457","RS 660","RSV4","Tuono 125","Tuono 457","Tuono 660","Tuono V4","Tuareg 660","SR GT 125","SR GT 200"],
-"Benelli":["BN 125","TNT 125","302S","TRK 251","TRK 502","TRK 502 X","TRK 702","TRK 702 X","Leoncino 125","Leoncino 500","Leoncino 800"],
-"BMW":["G 310 R","G 310 GS","F 800 GS","F 900 R","F 900 XR","F 900 GS","F 900 GS Adventure","R 12","R 12 nineT","R 1250 R","R 1250 RS","R 1250 RT","R 1250 GS","R 1250 GS Adventure","R 1300 GS","R 1300 GS Adventure","S 1000 R","S 1000 RR","M 1000 R","M 1000 RR","S 1000 XR","K 1600 GT","K 1600 GTL","CE 02","CE 04","C 400 GT","C 400 X"],
-"Brixton":["Cromwell 125","Cromwell 250","Cromwell 1200","Crossfire 125 XS","Crossfire 500","Crossfire 500 X","Felsberg 125","Felsberg 250","Sunray 125"],
-"CFMOTO":["125NK","300NK","450NK","450SR","450SR S","450MT","650MT","700MT","700CL-X Heritage","700CL-X Sport","800MT Sport","800MT Touring","800MT Explore","800MT-X","800NK","675NK","675SR-R","125SC-F"],
-"Ducati":["Panigale V2","Panigale V4","Streetfighter V2","Streetfighter V4","Monster","Monster SP","Multistrada V2","Multistrada V4","Multistrada V4 Rally","DesertX","DesertX Rally","Diavel V4","XDiavel V4","Scrambler Icon","Scrambler Full Throttle","Scrambler Nightshift","Hypermotard 698 Mono","Hypermotard 950"],
-"Fantic":["Caballero 125","Caballero 500","Caballero 700","XEF 125","XE 125","XMF 125"],
-"GasGas":["ES 700","SM 700","EC 250","EC 300","MC 125","MC 250F","MC 450F"],
-"Harley-Davidson":["Nightster","Nightster Special","Sport Glide","Street Bob 114","Fat Bob 114","Fat Boy 114","Breakout 117","Low Rider S","Low Rider ST","Road King Special","Street Glide","Road Glide","Pan America 1250","Pan America 1250 Special"],
-"Honda":["CB125F","CB125R","CB300R","CB500F","CB500 Hornet","CB650R","CB750 Hornet","CB1000 Hornet","CB1000R","CBR125R","CBR500R","CBR600RR","CBR650R","CBR1000RR Fireblade","CL500","CMX500 Rebel","CMX1100 Rebel","CRF250L","CRF300L","CRF300 Rally","CRF1100L Africa Twin","CRF1100L Africa Twin Adventure Sports","NC700X","NC750X","NT1100","Transalp XL750","Forza 125","Forza 350","Forza 750","PCX125","SH125i","SH350i","X-ADV","Gold Wing","Monkey 125","Dax 125","MSX125 Grom"],
-"Husqvarna":["Svartpilen 125","Svartpilen 401","Svartpilen 801","Vitpilen 125","Vitpilen 401","Vitpilen 801","Norden 901","Norden 901 Expedition","701 Enduro","701 Supermoto"],
-"Indian":["Scout Bobber","Scout Classic","Sport Scout","101 Scout","FTR","FTR Sport","Chief Dark Horse","Chief Bobber Dark Horse","Super Chief Limited","Chieftain","Roadmaster","Challenger","Pursuit"],
-"Kawasaki":["Z125","Z400","Z500","Z650","Z650RS","Z900","Z900RS","Z H2","Ninja 125","Ninja 400","Ninja 500","Ninja 650","Ninja ZX-4RR","Ninja ZX-6R","Ninja ZX-10R","Ninja H2","Versys-X 300","Versys 650","Versys 1000","Versys 1100","Vulcan S","Eliminator 500","KLX230","KX250","KX450"],
-"Keeway":["RKF 125","RKV 125","Superlight 125","V-Cruise 125","X-Light 125","Vieste 125","Vieste 300","MBP M502N","MBP C1002V"],
-"KTM":["125 Duke","390 Duke","790 Duke","890 Duke R","990 Duke","1390 Super Duke R","RC 125","RC 390","390 Adventure","790 Adventure","890 Adventure","890 Adventure R","1290 Super Adventure S","1290 Super Adventure R","1390 Super Adventure S","690 Enduro R","690 SMC R"],
-"Kymco":["Agility City 125","People S 125","X-Town 125","X-Town 300","Dink R 125","Dink X 125","AK 550 Premium","CV3"],
-"Moto Guzzi":["V7 Stone","V7 Special","V7 Sport","V9 Bobber","V85 TT","V85 TT Travel","Stelvio","Mandello V100","Mandello V100 S"],
-"Moto Morini":["Seiemmezzo STR","Seiemmezzo SCR","X-Cape 650","X-Cape 700","Calibro","Corsaro Sport","Milano"],
-"MV Agusta":["Brutale 800","Brutale 1000","Dragster RR","F3 800","Superveloce 800","Turismo Veloce","Enduro Veloce","Rush 1000"],
-"Peugeot":["Tweet 125","Pulsion 125","XP400","Metropolis 400","Django 125","PM-01 125","PM-03"],
-"Piaggio":["Liberty 125","Medley 125","Medley 150","Beverly 300","Beverly 400","MP3 310","MP3 400","MP3 530"],
-"QJMotor":["SRK 125S","SRK 400","SRK 550","SRK 700","SRK 800 RR","SRT 550","SRT 700","SRT 800 SX","Fort 125N","Fort 350"],
-"Royal Enfield":["Hunter 350","Classic 350","Meteor 350","Bullet 350","Guerrilla 450","Himalayan 450","Scram 411","Interceptor 650","Continental GT 650","Super Meteor 650","Shotgun 650","Bear 650"],
-"Sherco":["125 SE Factory","250 SE Factory","300 SE Factory","250 SEF Factory","300 SEF Factory","450 SEF Factory"],
-"Suzuki":["GSX-S125","GSX-R125","GSX-8S","GSX-8R","GSX-S950","GSX-S1000","GSX-S1000GT","Hayabusa","V-Strom 250SX","V-Strom 650","V-Strom 800","V-Strom 800DE","V-Strom 1050","V-Strom 1050DE","SV650","Katana","Burgman Street 125EX","Burgman 400"],
-"SYM":["Jet 14 125","Jet X 125","Symphony ST 125","ADX 125","ADX 300","Joymax Z+ 300","Maxsym GT 400","Maxsym TL 508"],
-"Triumph":["Speed 400","Scrambler 400 X","Trident 660","Tiger Sport 660","Daytona 660","Street Triple 765 R","Street Triple 765 RS","Speed Triple 1200 RS","Tiger 850 Sport","Tiger 900 GT","Tiger 900 Rally Pro","Tiger 1200 GT","Tiger 1200 Rally Pro","Bonneville T100","Bonneville T120","Speed Twin 900","Speed Twin 1200","Scrambler 900","Scrambler 1200","Rocket 3"],
-"Vespa":["Primavera 50","Primavera 125","Sprint 50","Sprint 125","GTS 125","GTS 300","GTS Super 300","GTV 300"],
-"Voge":["R125","300 Rally","500R","525R","525DSX","625DSX","650DSX","900DSX","SR1 125","SR3","SR4 Max"],
-"Yamaha":["MT-125","MT-03","MT-07","MT-09","MT-09 SP","MT-10","MT-10 SP","XSR125","XSR700","XSR900","R125","R3","R6","R7","R9","R1","Tracer 7","Tracer 7 GT","Tracer 9","Tracer 9 GT","Tracer 9 GT+","Ténéré 700","Ténéré 700 Rally","Ténéré 700 World Raid","NMAX 125","XMAX 125","XMAX 300","TMAX","TMAX Tech MAX","Tricity 125","Tricity 300","WR125R","YZF-R125","YZF-R3","YZF-R6","YZF-R1"],
-"Zero":["S","SR","SR/F","SR/S","DS","DSR","DSR/X","FX","FXE"]
-};
-const bikeExtras=["Revisões em dia","Com garantia","Quickshifter","Mota de garagem","Livro de revisões","2.ª chave","Escape homologado","Punhos aquecidos","Cruise control","Controlo de tração","ABS em curva","Suspensão eletrónica","Malas laterais","Top case","Proteções de motor","Cavalete central","Tomada USB","GPS / Navegação","Alarme","Imobilizador","Pneus recentes","Kit transmissão recente","Bateria recente","Nunca caiu","Único dono","Financiamento disponível"];
-const bikeTypes=["Naked","Adventure / Trail","Sport / Supersport","Sport Touring","Touring","Cruiser","Custom","Scooter","Maxi-Scooter","Enduro","Motocross","Supermoto","Clássica / Retro","Elétrica","Triciclo"];
-function brandOptions(selected=''){return '<option value="">Escolher marca</option>'+Object.keys(bikeCatalog).sort().map(b=>`<option ${b===selected?'selected':''}>${b}</option>`).join('')}
-function modelOptions(brand,selected=''){let a=bikeCatalog[brand]||[];return '<option value="">Escolher modelo</option>'+a.map(m=>`<option ${m===selected?'selected':''}>${m}</option>`).join('')}
-function yearOptions(selected=''){let y=new Date().getFullYear()+1,out='<option value="">Ano</option>';for(let i=y;i>=1970;i--)out+=`<option value="${i}" ${String(i)===String(selected)?'selected':''}>${i}</option>`;return out}
-function bindCatalog(brandId,modelId,selectedModel=''){let b=$('#'+brandId),m=$('#'+modelId);if(!b||!m)return;m.innerHTML=modelOptions(b.value,selectedModel);b.onchange=()=>{m.innerHTML=modelOptions(b.value);};}
-function extrasHtml(selected=[]){return `<div class="checkGrid">${bikeExtras.map((x,i)=>`<label class="checkItem"><input type="checkbox" class="extraCheck" value="${x}" ${selected.includes(x)?'checked':''}>${x}</label>`).join('')}</div>`}
-closeModal();toast('Localização ativada')},()=>toast('Não foi possível obter a localização'))}
+function openLocation(){
+  openModal(`<h2>Escolher localização</h2>
+    <div class="field"><label for="locInput">Distrito / cidade</label><input id="locInput" placeholder="Ex.: Lisboa, Setúbal, Porto"></div>
+    <button class="btn primary full" onclick="saveLocation()">Usar esta zona</button>
+    <button id="locDevice" class="btn secondary full" style="margin-top:8px" onclick="useGeo()">Usar localização do telemóvel</button>
+    <p id="locStatus" class="muted" role="status" style="font-size:12px;line-height:1.5"></p>`);
+  const manual=localStorage.getItem('mv_location');
+  $('#locInput').value=manual&&manual!=='Portugal'&&manual!=='Perto de mim'?manual:'';
+}
+
+function setSelectedLocation(label,coords){
+  state.location=label;
+  state.locationCoords=coords;
+  $('#locationLabel').textContent=label;
+  $('#locationLabel').title=label;
+  if(state.user)updateProfile();
+  closeModal();
+}
+
+function saveLocation(){
+  const label=$('#locInput').value.trim()||'Portugal';
+  localStorage.setItem('mv_location',label);
+  setSelectedLocation(label,null);
+  toast('Zona atualizada');
+}
+
+function useGeo(){
+  const id=++locationRequestId;
+  const button=$('#locDevice');
+  button.dataset.requestId=String(id);
+  button.disabled=true;
+  $('#locStatus').textContent='A obter a tua localização…';
+  if(window.Android?.useDeviceLocation){
+    Android.useDeviceLocation(id);
+  }else if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      ({coords})=>onDeviceLocation(id,{lat:coords.latitude,lon:coords.longitude},null),
+      error=>onDeviceLocation(id,null,error.code===1?'denied':'unavailable'),
+      {timeout:18000,maximumAge:30000}
+    );
+  }else{
+    onDeviceLocation(id,null,'unsupported');
+  }
+}
+
+function onDeviceLocation(id,coords,error){
+  const button=$('#locDevice');
+  if(!button||button.dataset.requestId!==String(id)||!$('#modalWrap').classList.contains('show'))return;
+  if(coords&&Number.isFinite(coords.lat)&&Number.isFinite(coords.lon)){
+    setSelectedLocation('Perto de mim',coords);
+    toast('Localização atualizada');
+    return;
+  }
+  button.disabled=false;
+  const messages={
+    denied:window.Android?'Permite a localização nas definições do MotoVerse ou indica a zona manualmente.':'Permite a localização no navegador ou indica a zona manualmente.',
+    disabled:'Liga a localização do telemóvel e tenta novamente.',
+    unsupported:'A localização automática está indisponível. Indica a tua zona.',
+    unavailable:'Não foi possível obter a localização. Tenta novamente ou indica a tua zona.'
+  };
+  $('#locStatus').textContent=messages[error]||messages.unavailable;
+}
+
+function openMapInSelectedZone(term){
+  const coords=state.locationCoords;
+  if(coords&&window.Android?.openNearbyMapSearch){
+    Android.openNearbyMapSearch(term,coords.lat,coords.lon);
+  }else if(window.Android?.openMapSearch){
+    Android.openMapSearch(term+' '+state.location);
+  }else{
+    toast('Pesquisa no Maps disponível na aplicação Android.');
+  }
+}
 function searchAll(){let q=$('#homeSearch').value.trim();if(!q)return;go('explore');$('#exploreSearch').value=q;toast(`A procurar “${q}”`) }
 function setExplore(which,btn){$$('.chips .chip').forEach(c=>{if(c.parentElement===btn.parentElement)c.classList.remove('active')});btn.classList.add('active');['Motas','Oficinas','Stands','Pecas'].forEach(x=>$('#explore'+x).classList.add('hidden'));$('#explore'+({motas:'Motas',oficinas:'Oficinas',stands:'Stands',pecas:'Pecas'}[which])).classList.remove('hidden')}
 const portugalLocations={

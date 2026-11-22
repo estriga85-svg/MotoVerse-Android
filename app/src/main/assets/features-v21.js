@@ -299,7 +299,7 @@
         qa('.meetGrid [data-mv-spot]').forEach(btn=>{btn.onclick=()=>{const e=upcoming.find(x=>x.id===btn.dataset.mvSpot);if(e?.location&&window.Android?.openMapSearch)Android.openMapSearch(String(e.location)+' Portugal');else window.go('community')}});
       }else{
         spots.innerHTML='<button class="meetSpot" style="width:100%;grid-column:1/-1" id="mvMeetSearchMap"><div><strong>Descobrir locais no Maps</strong><small>Pesquisar espaços de encontro de motociclistas na tua zona</small></div></button>';
-        q('#mvMeetSearchMap').onclick=()=>{if(window.Android?.openMapSearch)Android.openMapSearch('pontos de encontro motards '+String(st()?.location||'Portugal'));else notice('Disponível na aplicação Android.')};
+        q('#mvMeetSearchMap').onclick=()=>openMapInSelectedZone('pontos de encontro motards');
       }
     }
   }
@@ -332,7 +332,7 @@
     const subtitle=root.querySelector('.sectionHead h2');
     if(subtitle&&subtitle.textContent==='Perto de ti')subtitle.textContent='Encontros publicados';
     const mapsButton=root.querySelector('.grid2 .quick:nth-child(2)');
-    if(mapsButton){mapsButton.removeAttribute('onclick');const strong=mapsButton.querySelector('strong'),small=mapsButton.querySelector('span');if(strong)strong.textContent='Pesquisar no mapa';if(small)small.textContent='Locais na zona selecionada';mapsButton.onclick=()=>{if(window.Android?.openMapSearch)Android.openMapSearch('encontros de motas '+String(st()?.location||'Portugal'));else notice('Pesquisa disponível na aplicação Android.')}}
+    if(mapsButton){mapsButton.removeAttribute('onclick');const strong=mapsButton.querySelector('strong'),small=mapsButton.querySelector('span');if(strong)strong.textContent='Pesquisar no mapa';if(small)small.textContent='Locais na zona selecionada';mapsButton.onclick=()=>openMapInSelectedZone('encontros de motas')}
     const chips=qa('#community .chips .chip');
     chips.forEach(b=>{b.onclick=()=>{meetupFilter=b.textContent.trim();chips.forEach(x=>x.classList.toggle('active',x===b));applyMeetupFilter()}});
     const sections=qa('#community .section');
@@ -420,11 +420,7 @@
       const section=q(selector);if(!section||section.dataset.mvRealSearch)return;
       section.dataset.mvRealSearch='1';
       section.innerHTML='<div class="sectionHead"><h2>'+esc(title)+'</h2></div><div class="mvToolBox" style="margin:4px 0"><h3>'+esc(description)+'</h3><p>Pesquisa em lojas e empresas reais através do Google Maps, na localização que escolheste. Os resultados abrem fora da MotoVerse.</p><button class="btn primary full mvOpenServices">Pesquisar no Maps</button></div>'+(selector==='#explorePecas'?'<div class="notice">A publicação de anúncios de peças e acessórios dentro da MotoVerse ainda não está disponível.</div>':'');
-      section.querySelector('.mvOpenServices').onclick=()=>{
-        const locality=String(st()?.location||'Portugal');
-        if(window.Android?.openMapSearch)Android.openMapSearch(term+' '+locality);
-        else notice('A pesquisa no Maps só está disponível na app Android.');
-      };
+      section.querySelector('.mvOpenServices').onclick=()=>openMapInSelectedZone(term);
     });
   }
   window.onApprovedListingsFailed=function(){marketplaceReady=true;notice('Não foi possível atualizar os anúncios. Verifica a ligação e tenta novamente.');drawMarketplace()};
