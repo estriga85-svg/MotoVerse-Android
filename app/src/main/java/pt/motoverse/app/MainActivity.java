@@ -295,9 +295,63 @@ public class MainActivity extends Activity {
         }
         @JavascriptInterface public void loadMyListings(){FirebaseUser u=auth.getCurrentUser();if(u==null)return;db.collection("listings").whereEqualTo("ownerUid",u.getUid()).get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onMyListings&&window.onMyListings("+a+");");});}
         @JavascriptInterface public void loadApprovedListings(){db.collection("listings").whereEqualTo("status","approved").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onApprovedListings&&window.onApprovedListings("+a+");");}).addOnFailureListener(e->runJs("window.onApprovedListingsFailed&&window.onApprovedListingsFailed();"));}
-        @JavascriptInterface public void loadPendingListingsAdmin(){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Área reservada ao revisor.");return;}db.collection("listings").whereEqualTo("status","pending").get().addOnSuccessListener(s->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:s)a.put(docJson(d));runJs("window.onPendingListings&&window.onPendingListings("+a+");window.onPendingCount&&window.onPendingCount("+s.size()+");");});}
+        @JavascriptInterface public void loadPendingListingsAdmin(int requestId) {
+            if (!isAdmin(auth.getCurrentUser())) {
+                pendingListingsFailed(requestId, "Área reservada ao revisor.");
+                return;
+            }
+            db.collection("listings").whereEqualTo("status", "pending").get()
+                    .addOnSuccessListener(snapshot -> {
+                        if (!isAdmin(auth.getCurrentUser())) return;
+                        JSONArray items = new JSONArray();
+                        for (QueryDocumentSnapshot document : snapshot) items.put(docJson(document));
+                        runJs("window.onPendingListings&&window.onPendingListings(" + requestId + "," + items + ");"
+                                + "window.onPendingCount&&window.onPendingCount(" + snapshot.size() + ");");
+                    })
+                    .addOnFailureListener(error -> pendingListingsFailed(requestId, "Não foi possível carregar os anúncios pendentes."));
+        }
+
+        private void pendingListingsFailed(int requestId, String message) {
+            runJs("window.onPendingListingsFailed&&window.onPendingListingsFailed("
+                    + requestId + "," + JSONObject.quote(message) + ");");
+        }
+
         @JavascriptInterface public void loadPendingCountAdmin(){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u))loadPendingCountForAdmin();}
-        @JavascriptInterface public void reviewListing(String id,String status){FirebaseUser u=auth.getCurrentUser();if(!isAdmin(u)){sendError("Apenas o revisor pode aprovar anúncios.");return;}if(!"approved".equals(status)&&!"rejected".equals(status))return;Map<String,Object>x=new HashMap<>();x.put("status",status);x.put("reviewedAt",FieldValue.serverTimestamp());x.put("reviewedBy",u.getEmail());db.collection("listings").document(id).update(x).addOnSuccessListener(v->{runJs("window.onReviewDone&&window.onReviewDone();");loadPendingCountForAdmin();}).addOnFailureListener(e->sendError("Não foi possível atualizar o anúncio."));}
+        @JavascriptInterface public void reviewListing(String id, String status) {
+            FirebaseUser reviewer = auth.getCurrentUser();
+            if (!isAdmin(reviewer)) {
+                reviewFailed(id, "Apenas o revisor pode aprovar ou rejeitar anúncios.", false);
+                return;
+            }
+            if (id == null || !id.matches("[A-Za-z0-9_-]{1,130}")
+                    || (!"approved".equals(status) && !"rejected".equals(status))) {
+                reviewFailed(id, "Decisão ou anúncio inválido.", false);
+                return;
+            }
+            var listing = db.collection("listings").document(id);
+            Map<String, Object> decision = new HashMap<>();
+            decision.put("status", status);
+            decision.put("reviewedAt", FieldValue.serverTimestamp());
+            decision.put("reviewedBy", reviewer.getEmail());
+            db.runTransaction(transaction -> {
+                if (!"pending".equals(transaction.get(listing).getString("status"))) return false;
+                transaction.update(listing, decision);
+                return true;
+            }).addOnSuccessListener(updated -> {
+                if (updated) {
+                    runJs("window.onReviewDone&&window.onReviewDone("
+                            + JSONObject.quote(id) + "," + JSONObject.quote(status) + ");");
+                } else {
+                    reviewFailed(id, "Este anúncio já não está pendente.", true);
+                }
+                loadPendingCountForAdmin();
+            }).addOnFailureListener(error -> reviewFailed(id, "Não foi possível guardar a decisão. Tenta novamente.", false));
+        }
+
+        private void reviewFailed(String id, String message, boolean refresh) {
+            runJs("window.onReviewFailed&&window.onReviewFailed("
+                    + JSONObject.quote(id) + "," + JSONObject.quote(message) + "," + refresh + ");");
+        }
 
         @JavascriptInterface public void exportGarageCsv(String csv){
             if(csv==null||csv.length()>1000000){sendError("Histórico demasiado grande para exportar.");return;}

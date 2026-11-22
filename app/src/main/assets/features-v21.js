@@ -19,6 +19,8 @@
     '.mvMarketCard{cursor:pointer}.mvMarketCard .bikeImg{background-size:contain;background-repeat:no-repeat;background-color:#0e1318}',
     '.mvMarketCard .bikeImg:after{display:none}.mvMiniHint{font-size:10px;color:var(--muted);line-height:1.5}',
     '.mvGallery{display:flex;gap:8px;overflow-x:auto;padding-bottom:5px}.mvGallery img{width:85%;max-width:310px;height:210px;flex:none;object-fit:contain;background:#10151a;border-radius:14px}',
+    '.mvReviewPhotos{scroll-snap-type:x mandatory}.mvReviewPhotos img{width:100%;max-width:none;height:clamp(180px,55vw,300px);scroll-snap-align:start}',
+    '.mvReviewActions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.mvReviewActions button{flex:1}.mvReviewBack{margin:0 0 10px}',
     '.mvToolBox{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:15px;margin:12px 16px}',
     '.mvToolBox h3{font-size:15px;margin:0 0 9px}.mvToolBox p{font-size:11px;line-height:1.5;color:var(--muted)}',
     '.mvToolGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}',
@@ -102,13 +104,24 @@
     }
   }
   function findListing(id){return listings().find(x=>x.id===id)}
+  function listingDetails(x, forReview=false){
+    const photos=Array.isArray(x.photos)?x.photos:[];
+    const images=[...new Set(photos.concat(x.mainPhoto||[]).map(safePhoto).filter(Boolean))];
+    const gallery=images.length
+      ? '<div class="mvGallery'+(forReview?' mvReviewPhotos':'')+'" aria-label="Fotografias da mota">'+images.map((src,i)=>'<img src="'+esc(src)+'" alt="Fotografia '+(i+1)+' de '+images.length+'">').join('')+'</div>'
+      : '<div class="empty">Fotografias não disponíveis</div>';
+    const photoHint=forReview&&images.length>1?'<p class="mvMiniHint">Desliza para ver as '+images.length+' fotografias.</p>':'';
+    const specs=[x.year||'Ano não indicado',mileage(x),x.type,x.location||[x.county,x.district].filter(Boolean).join(', ')||'Local não indicado'];
+    const extras=Array.isArray(x.extras)&&x.extras.length?'<p class="mvInfo"><strong>Extras:</strong> '+esc(x.extras.join(' · '))+'</p>':'';
+    const seller=[x.ownerName||'Utilizador MotoVerse',forReview?x.ownerEmail:''].filter(Boolean).join(' · ');
+    return '<h2>'+esc(x.brand)+' '+esc(x.model)+'</h2>'+gallery+photoHint+
+      '<h2 style="color:var(--accent2);margin-top:13px">'+price(x)+'</h2><p class="mvInfo">'+esc(specs.filter(Boolean).join(' · '))+'</p>'+extras+
+      '<div class="mvToolBox" style="margin:12px 0"><h3>Descrição do vendedor</h3><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(x.desc||'Sem descrição adicional.')+'</p><p style="overflow-wrap:anywhere">Vendedor: '+esc(seller)+'</p></div>';
+  }
   function openListing(id){
     const x=findListing(id);if(!x)return notice('Anúncio indisponível ou ainda em revisão.');
     selectedListing=id;
-    const images=(Array.isArray(x.photos)?x.photos:[]).map(safePhoto).filter(Boolean);
-    const gallery=images.length?'<div class="mvGallery">'+images.map(src=>'<img src="'+esc(src)+'" alt="Fotografia da mota">').join('')+'</div>':'<div class="empty">Fotografias não disponíveis</div>';
-    const extras=Array.isArray(x.extras)&&x.extras.length?'<p class="mvInfo"><strong>Extras:</strong> '+esc(x.extras.join(' · '))+'</p>':'';
-    window.openModal('<h2>'+esc(x.brand)+' '+esc(x.model)+'</h2>'+gallery+'<h2 style="color:var(--accent2);margin-top:13px">'+price(x)+'</h2><p class="mvInfo">'+esc(x.year||'Ano não indicado')+' · '+mileage(x)+' · '+esc(x.location||'Local não indicado')+'</p>'+extras+'<div class="mvToolBox" style="margin:12px 0"><h3>Descrição do vendedor</h3><p style="white-space:pre-wrap">'+esc(x.desc||'Sem descrição adicional.')+'</p><p>Vendedor: '+esc(x.ownerName||'Utilizador MotoVerse')+'</p></div><button class="btn primary full" id="mvContactSeller">💬 Contactar vendedor</button><div class="mvToolGrid" style="margin-top:9px"><button class="mvToolBtn" id="mvCheckBike">✓ Verificar mota</button><button class="mvToolBtn" id="mvShareBike">↗ Partilhar detalhes</button><button class="mvToolBtn" id="mvSafetyAdvice">🛡 Compra segura</button><button class="mvToolBtn" id="mvReportBike">⚑ Denunciar por e-mail</button></div><p class="mvMiniHint" style="margin-top:12px">A MotoVerse não recebe pagamentos nem garante o estado mecânico dos veículos.</p>');
+    window.openModal(listingDetails(x)+'<button class="btn primary full" id="mvContactSeller">💬 Contactar vendedor</button><div class="mvToolGrid" style="margin-top:9px"><button class="mvToolBtn" id="mvCheckBike">✓ Verificar mota</button><button class="mvToolBtn" id="mvShareBike">↗ Partilhar detalhes</button><button class="mvToolBtn" id="mvSafetyAdvice">🛡 Compra segura</button><button class="mvToolBtn" id="mvReportBike">⚑ Denunciar por e-mail</button></div><p class="mvMiniHint" style="margin-top:12px">A MotoVerse não recebe pagamentos nem garante o estado mecânico dos veículos.</p>');
     q('#mvContactSeller').onclick=()=>{if(!x.ownerUid)return notice('O vendedor não tem contacto disponível.');window.contactSeller(id,x.ownerUid,x.ownerName||'vendedor')};
     q('#mvCheckBike').onclick=()=>openChecklist(id);
     q('#mvShareBike').onclick=()=>{const text=[x.brand+' '+x.model,price(x),mileage(x),x.location||'',x.desc||'','Encontrado na MotoVerse.'].filter(Boolean).join('\n');if(window.Android?.shareText)Android.shareText('Anúncio MotoVerse',text);else notice('Partilha indisponível nesta versão.')};
@@ -116,6 +129,75 @@
     q('#mvReportBike').onclick=()=>{if(window.Android?.reportListing)Android.reportListing(id,x.brand+' '+x.model);else notice('Denúncia por e-mail indisponível.')};
   }
   window.mvOpenListing=openListing;
+
+  let reviewListRequest=0;
+  let reviewInFlight=null;
+  const reviewVisible=()=>q('#modalWrap')?.classList.contains('show')&&(q('#mvPending')||q('#mvReviewDetail'));
+  window.openAdminReview=function(){
+    if(!st()?.user?.admin)return notice('Área reservada ao revisor.');
+    window.openModal('<h2>Rever anúncios</h2><div id="mvPending" class="notice" role="status">A carregar…</div>');
+    window.Android.loadPendingListingsAdmin(++reviewListRequest);
+  };
+  window.onPendingListings=function(request,items){
+    const list=q('#mvPending');
+    if(!list||!reviewVisible()||request!==reviewListRequest||!st()?.user?.admin)return;
+    const pending=Array.isArray(items)?items.filter(x=>x?.status==='pending'&&safeId(x.id)):[];
+    if(!pending.length){list.textContent='Sem anúncios pendentes.';return;}
+    list.className='';
+    list.removeAttribute('role');
+    list.innerHTML=pending.map((x,i)=>'<article class="listItem" style="display:block;margin-top:10px"><strong>'+esc(x.brand)+' '+esc(x.model)+'</strong><div class="catalogNote">'+price(x)+'</div><button type="button" class="btn secondary full" data-mv-review="'+i+'" style="margin-top:8px">Ver anúncio</button></article>').join('');
+    list.querySelectorAll('[data-mv-review]').forEach(button=>{
+      button.onclick=()=>openReviewDetail(pending[Number(button.dataset.mvReview)]);
+    });
+  };
+  window.onPendingListingsFailed=function(request,message){
+    const list=q('#mvPending');
+    if(!list||!reviewVisible()||request!==reviewListRequest)return;
+    list.textContent=message;
+    const retry=document.createElement('button');
+    retry.type='button';retry.className='btn secondary full';retry.textContent='Tentar novamente';
+    retry.onclick=window.openAdminReview;
+    list.appendChild(retry);
+  };
+  function openReviewDetail(listing){
+    if(!st()?.user?.admin)return;
+    window.openModal('<button type="button" id="mvReviewBack" class="btn secondary mvReviewBack">‹ Voltar aos pendentes</button><div id="mvReviewDetail">'+listingDetails(listing,true)+
+      '<div class="mvReviewActions"><button type="button" class="btn primary" data-mv-decision="approved">Aprovar</button><button type="button" class="btn secondary" data-mv-decision="rejected">Rejeitar</button></div><p class="mvInfo" role="status" id="mvReviewStatus"></p></div>');
+    const detail=q('#mvReviewDetail');
+    detail.closest('.modal').scrollTop=0;
+    q('#mvReviewBack').onclick=window.openAdminReview;
+    const decisions=Array.from(detail.querySelectorAll('[data-mv-decision]'));
+    if(reviewInFlight){
+      decisions.forEach(button=>button.disabled=true);
+      q('#mvReviewStatus').textContent='A guardar a decisão anterior…';
+    }
+    for(const button of decisions){
+      button.onclick=()=>{
+        if(reviewInFlight||!st()?.user?.admin)return;
+        reviewInFlight=listing.id;
+        decisions.forEach(control=>control.disabled=true);
+        q('#mvReviewStatus').textContent='A guardar a decisão…';
+        window.Android.reviewListing(listing.id,button.dataset.mvDecision);
+      };
+    }
+  }
+  window.onReviewDone=function(id,status){
+    if(reviewInFlight!==id)return;
+    reviewInFlight=null;
+    notice(status==='approved'?'Anúncio aprovado e publicado.':'Anúncio rejeitado.');
+    if(reviewVisible())window.openAdminReview();
+    if(status==='approved')window.Android.loadApprovedListings();
+  };
+  window.onReviewFailed=function(id,message,refresh){
+    if(reviewInFlight!==id)return;
+    reviewInFlight=null;
+    notice(message);
+    if(!reviewVisible())return;
+    if(refresh){window.openAdminReview();return;}
+    qa('#mvReviewDetail [data-mv-decision]').forEach(button=>button.disabled=false);
+    const status=q('#mvReviewStatus');
+    if(status)status.textContent=message;
+  };
   const checklistItems=[
     'Comparar VIN/número de quadro com o DUA e documentação',
     'Confirmar matrícula, titularidade e eventuais encargos',
