@@ -42,15 +42,64 @@ methods = r'''        @JavascriptInterface public void loadFavorites(){
         @JavascriptInterface public void deleteSearchAlert(String id){
             FirebaseUser u=auth.getCurrentUser();if(u==null||id==null||id.trim().isEmpty())return;db.collection("users").document(u.getUid()).collection("alerts").document(id).delete().addOnSuccessListener(v->runJs("window.onSearchAlertDeleted&&window.onSearchAlertDeleted();")).addOnFailureListener(e->sendError("Não foi possível apagar o alerta."));
         }
-        @JavascriptInterface public void saveMeetup(String json){
-            FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão para criar encontros.");return;}
-            try{Map<String,Object>d=jsonToMap(new JSONObject(json));d.put("organizerUid",u.getUid());d.put("organizerEmail",u.getEmail()==null?"":u.getEmail());d.put("organizerName",u.getDisplayName()==null?"Motociclista":u.getDisplayName());d.put("organizerVerified",isAdmin(u)||u.isEmailVerified());d.put("status","active");d.put("createdAt",FieldValue.serverTimestamp());d.put("updatedAt",FieldValue.serverTimestamp());db.collection("meetups").add(d).addOnSuccessListener(ref->runJs("window.onMeetupSaved&&window.onMeetupSaved("+JSONObject.quote(ref.getId())+");")).addOnFailureListener(e->sendError("Não foi possível criar o encontro."));}catch(Exception e){sendError("Dados do encontro inválidos.");}
+        private void meetupPublishFailed(String message) {
+            runJs("window.onCommunityPublishFailed&&window.onCommunityPublishFailed(" + JSONObject.quote(message) + ");");
+        }
+        @JavascriptInterface public void saveMeetup(String json) {
+            FirebaseUser user = auth.getCurrentUser();
+            if (user == null) { meetupPublishFailed("Inicia sessão para publicar um encontro."); return; }
+            try {
+                JSONObject input = new JSONObject(json);
+                String category = input.getString("category");
+                String name = input.getString("name").trim();
+                String location = input.getString("location").trim();
+                String date = input.getString("date");
+                String time = input.getString("time");
+                String route = input.optString("route").trim();
+                String description = input.optString("description").trim();
+                if (!CommunityNotifications.TYPES.contains(category) || name.isEmpty() || name.length() > 100
+                        || location.isEmpty() || location.length() > 200 || route.length() > 300 || description.length() > 1500
+                        || !date.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}") || !time.matches("([01][0-9]|2[0-3]):[0-5][0-9]")) {
+                    meetupPublishFailed("Confirma o título, local, tipo, data e hora.");
+                    return;
+                }
+                String type;
+                switch (category) {
+                    case "cafezada": type = "Cafezada"; break;
+                    case "en2": type = "Tour EN2"; break;
+                    case "tour": type = "Tour"; break;
+                    case "trilho": type = "Trilhos / Off-road"; break;
+                    case "trackday": type = "Track Day"; break;
+                    default: type = "Passeio";
+                }
+                Map<String,Object> item = new HashMap<>();
+                item.put("category", category);
+                item.put("type", type);
+                item.put("name", name);
+                item.put("location", location);
+                item.put("date", date);
+                item.put("time", time);
+                item.put("route", route);
+                item.put("description", description);
+                item.put("notifyInterested", input.optBoolean("notifyInterested", false));
+                item.put("organizerUid", user.getUid());
+                item.put("organizerName", user.getDisplayName() == null ? "Motociclista" : user.getDisplayName());
+                item.put("organizerVerified", isAdmin(user) || user.isEmailVerified());
+                item.put("status", "active");
+                item.put("createdAt", FieldValue.serverTimestamp());
+                item.put("updatedAt", FieldValue.serverTimestamp());
+                db.collection("meetups").add(item)
+                    .addOnSuccessListener(ref -> runJs("window.onMeetupSaved&&window.onMeetupSaved(" + JSONObject.quote(ref.getId()) + ");"))
+                    .addOnFailureListener(error -> meetupPublishFailed("Não foi possível publicar o encontro. Tenta novamente."));
+            } catch (Exception error) {
+                meetupPublishFailed("Dados do encontro inválidos.");
+            }
         }
         @JavascriptInterface public void loadMyMeetups(){
             FirebaseUser u=auth.getCurrentUser();if(u==null){sendError("Inicia sessão para ver os teus encontros.");return;}db.collection("meetups").whereEqualTo("organizerUid",u.getUid()).get().addOnSuccessListener(snap->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:snap)a.put(docJson(d));runJs("window.onMyMeetupsLoaded&&window.onMyMeetupsLoaded("+a+");");}).addOnFailureListener(e->sendError("Não foi possível carregar os encontros."));
         }
         @JavascriptInterface public void loadMeetups(){
-            db.collection("meetups").whereEqualTo("status","active").get().addOnSuccessListener(snap->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:snap)a.put(docJson(d));runJs("window.onMeetupsLoaded&&window.onMeetupsLoaded("+a+");");}).addOnFailureListener(e->sendError("Não foi possível atualizar os encontros."));
+            db.collection("meetups").whereEqualTo("status","active").get().addOnSuccessListener(snap->{JSONArray a=new JSONArray();for(QueryDocumentSnapshot d:snap)a.put(docJson(d));runJs("window.onMeetupsLoaded&&window.onMeetupsLoaded("+a+");");}).addOnFailureListener(e -> runJs("window.onCommunityFeedFailed&&window.onCommunityFeedFailed();"));
         }
         @JavascriptInterface public void deleteMeetup(String id){
             FirebaseUser u=auth.getCurrentUser();if(u==null||id==null||id.trim().isEmpty())return;db.collection("meetups").document(id).get().addOnSuccessListener(d->{if(!d.exists()||!u.getUid().equals(d.getString("organizerUid"))){sendError("Só o organizador pode apagar este encontro.");return;}db.collection("meetups").document(id).delete().addOnSuccessListener(v->runJs("window.onMeetupDeleted&&window.onMeetupDeleted();")).addOnFailureListener(e->sendError("Não foi possível apagar o encontro."));});

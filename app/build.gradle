@@ -26,8 +26,8 @@ android {
         applicationId 'pt.motoverse.app'
         minSdk 24
         targetSdk 34
-        versionCode 17
-        versionName '1.12.2'
+        versionCode 18
+        versionName '1.13.0'
         buildConfigField 'String', 'ALERT_WEBHOOK_URL', '"' + alertWebhookUrl + '"'
     }
 
@@ -46,6 +46,7 @@ android {
 dependencies {
     implementation platform('com.google.firebase:firebase-bom:35.1.0')
     implementation 'com.google.firebase:firebase-auth'
+    implementation 'com.google.firebase:firebase-messaging'
     implementation 'com.google.firebase:firebase-firestore'
     implementation 'com.google.android.gms:play-services-auth:21.2.0'
     implementation 'androidx.work:work-runtime:2.9.1'

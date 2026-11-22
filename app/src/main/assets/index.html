@@ -117,6 +117,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
 
 
 .photoPreviewGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:9px}.photoPreviewItem{position:relative;aspect-ratio:1;border-radius:12px;background:#20272d center/cover no-repeat;border:1px solid #33404a}.photoRemove{position:absolute;right:5px;top:5px;width:25px;height:25px;border:0;border-radius:50%;background:rgba(0,0,0,.72);color:#fff;font-weight:900}.verifiedBadge{display:inline-flex;align-items:center;gap:5px;background:#123b2b;color:#7ff0b1;border:1px solid #256647;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900}.optionalLabel{font-weight:500;color:var(--muted)}
+#explore .search[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -145,11 +146,11 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
       </div>
 
       <div class="homeShortcuts">
-        <button class="sportShortcut" onclick="go('explore')"><b>🏍</b><span>Motas</span></button>
-        <button class="sportShortcut" onclick="openScreenModal('Oficinas perto de mim','Pesquisa por marca, serviço e distância. Na versão final, mostramos resultados reais e concessionários oficiais na tua zona.')"><b>🔧</b><span>Oficinas</span></button>
-        <button class="sportShortcut" onclick="setExplore('pecas');go('explore')"><b>⚙</b><span>Peças</span></button>
-        <button class="sportShortcut" onclick="go('community')"><b>▣</b><span>Eventos</span></button>
-        <button class="sportShortcut" onclick="go('community')"><b>👥</b><span>Encontros</span></button>
+        <button class="sportShortcut" onclick="openMotoDirectory('motas')"><b>🏍</b><span>Motas</span></button>
+        <button class="sportShortcut" onclick="openMotoDirectory('oficinas')"><b>🔧</b><span>Oficinas</span></button>
+        <button class="sportShortcut" onclick="openMotoDirectory('pecas')"><b>⚙</b><span>Peças</span></button>
+        <button class="sportShortcut" onclick="openMotoDirectory('stands')"><b>▣</b><span>Stands</span></button>
+        <button class="sportShortcut" onclick="go('community')"><b>👥</b><span>Comunidade</span></button>
       </div>
 
       <div class="homeSection">
@@ -186,7 +187,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
     <section id="explore" class="screen">
       <div class="headPad"><h1>Explorar</h1><p>Motas, oficinas, concessionários e peças.</p></div>
       <div class="search"><div class="searchbox">⌕ <input id="exploreSearch" placeholder="Marca, modelo ou serviço..."></div><button class="filterbtn" onclick="openBikeFilters()">☰</button></div>
-      <div class="section"><div class="chips"><button class="chip active" onclick="setExplore('motas',this)">Motas</button><button class="chip" onclick="setExplore('oficinas',this)">Oficinas</button><button class="chip" onclick="setExplore('stands',this)">Concessionários</button><button class="chip" onclick="setExplore('pecas',this)">Peças</button></div></div>
+      <div class="section"><div class="chips"><button class="chip active" data-explore-tab="motas" onclick="setExplore('motas',this)">Motas</button><button class="chip" data-explore-tab="oficinas" onclick="setExplore('oficinas',this)">Oficinas</button><button class="chip" data-explore-tab="stands" onclick="setExplore('stands',this)">Concessionários</button><button class="chip" data-explore-tab="pecas" onclick="setExplore('pecas',this)">Peças</button></div></div>
       <div class="section" id="exploreMotas">
         <div class="sectionHead"><h2>6 motas encontradas</h2><button>Ordenar</button></div>
         <div class="cards">
@@ -194,15 +195,15 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
           <article class="card"><div class="bikeImg" style="background-image:url('https://images.unsplash.com/photo-1591637333184-19aa84b3e01f?auto=format&fit=crop&w=900&q=80')"><div class="score">MotoScore 78</div><button class="fav">♡</button></div><div class="cardBody"><div class="cardTitle"><h3>BMW R 1250 GS</h3><div class="price">17 250 €</div></div><div class="meta"><span>2019</span><span>54 200 km</span><span>Lisboa</span></div></div></article>
         </div>
       </div>
-      <div class="section hidden" id="exploreOficinas"><div class="sectionHead"><h2>Oficinas recomendadas</h2><button>Mapa</button></div><div class="list"><div class="listItem"><div class="listIcon">🔧</div><div class="listMain"><h3>Moto Center Lisboa</h3><p>Benfica · 3 km · <span class="rating">★ 4,9</span></p><div class="tagrow"><span class="tag">Revisões</span><span class="tag">Pneus</span><span class="tag">Oficial</span></div></div></div><div class="listItem"><div class="listIcon">⚙️</div><div class="listMain"><h3>Racing Suspensões</h3><p>Matosinhos · <span class="rating">★ 4,8</span></p><div class="tagrow"><span class="tag">Suspensões</span><span class="tag">Preparações</span></div></div></div></div></div>
-      <div class="section hidden" id="exploreStands"><div class="sectionHead"><h2>Concessionários</h2><button>Mapa</button></div><div class="list"><div class="listItem"><div class="listIcon">🏢</div><div class="listMain"><h3>BMW Motorrad Lisboa</h3><p>Parque das Nações · <span class="rating">★ 4,8</span></p><div class="tagrow"><span class="tag">84 motas</span><span class="tag">Test Ride</span><span class="tag">Oficina oficial</span></div></div></div><div class="listItem"><div class="listIcon">🏁</div><div class="listMain"><h3>Multimarca MotoNorte</h3><p>Gondomar · <span class="rating">★ 4,6</span></p><div class="tagrow"><span class="tag">132 motas</span><span class="tag">Financiamento</span></div></div></div></div></div>
+      <div class="section hidden" id="exploreOficinas"></div>
+      <div class="section hidden" id="exploreStands"></div>
       <div class="section hidden" id="explorePecas"><div class="sectionHead"><h2>Peças e acessórios</h2><button>Filtros</button></div><div class="grid2"><div class="quick"><div class="quickIcon">🪖</div><strong>Capacete integral</strong><span>289 € · Novo</span></div><div class="quick"><div class="quickIcon">📡</div><strong>Intercom Mesh</strong><span>179 € · Novo</span></div><div class="quick"><div class="quickIcon">🏁</div><strong>Escape titânio</strong><span>420 € · Usado</span></div><div class="quick"><div class="quickIcon">⭕</div><strong>Pneus sport-touring</strong><span>245 € · Novo</span></div></div></div>
     </section>
 
     <section id="community" class="screen">
       <div class="headPad"><h1>Comunidade</h1><p>Encontros, eventos e rotas para motociclistas.</p></div>
-      <div class="section"><div class="grid2"><button class="quick" onclick="openMeetup()"><div class="quickIcon">📍</div><strong>Criar encontro</strong><span>Define local, hora e tipo de ride</span></button><button class="quick" onclick="toast('Mapa de encontros — demonstração')"><div class="quickIcon">🗺️</div><strong>Mapa ao vivo</strong><span>Vê o que acontece perto de ti</span></button></div></div>
-      <div class="section"><div class="sectionHead"><h2>Perto de ti</h2><button onclick="openLocation()">Alterar zona</button></div><div class="chips"><button class="chip active">Todos</button><button class="chip">Hoje</button><button class="chip">Fim de semana</button><button class="chip">Passeios</button><button class="chip">Convívios</button><button class="chip">Track Day</button></div></div>
+      <div class="section"><div class="grid2"><button class="quick" onclick="openMeetup()"><div class="quickIcon">📍</div><strong>Publicar encontro</strong><span>Cafezadas, passeios, tours e trilhos</span></button><button class="quick" onclick="toast('Mapa de encontros — demonstração')"><div class="quickIcon">🗺️</div><strong>Mapa ao vivo</strong><span>Vê o que acontece perto de ti</span></button></div></div>
+      <div class="section"><div class="sectionHead"><h2>Perto de ti</h2><button onclick="openLocation()">Alterar zona</button></div><div class="chips"><button class="chip active">Todos</button><button class="chip">Hoje</button><button class="chip">Fim de semana</button><button class="chip">Passeios</button><button class="chip">Cafezadas</button><button class="chip">Tours EN2</button><button class="chip">Outros tours</button><button class="chip">Trilhos</button><button class="chip">Track Day</button></div></div>
       <div class="section"><div class="cards" id="eventList">
         <div class="eventCard"><div class="datebox"><strong>31</strong><span>Out</span></div><div class="eventText"><span class="badge demo">Demo</span><h3>Sunset Ride — Serra da Arrábida</h3><p>Setúbal · 16:30 · 74 km · Ritmo tranquilo</p><div class="meetRow"><div class="avatars"><div class="avatar">N</div><div class="avatar">F</div><div class="avatar">+18</div></div><button class="joinbtn" onclick="joinEvent(this)">Vou</button></div></div></div>
         <div class="eventCard"><div class="datebox"><strong>01</strong><span>Nov</span></div><div class="eventText"><span class="badge demo">Demo</span><h3>Manhã Adventure — Sintra</h3><p>Sintra · 09:00 · Trail / Adventure · 112 km</p><div class="meetRow"><div class="avatars"><div class="avatar">R</div><div class="avatar">P</div><div class="avatar">+12</div></div><button class="joinbtn" onclick="joinEvent(this)">Vou</button></div></div></div>
@@ -246,6 +247,7 @@ html[data-theme="light"] .legalFooter strong{color:#26343c}
 <div class="modalWrap" id="modalWrap" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modalHandle"></div><div id="modalContent"></div></div></div>
 <div class="toast" id="toast"></div>
 
+<script src="directory-data.js"></script>
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const state={garage:JSON.parse(localStorage.getItem('mv_garage')||'null'), maintenance:JSON.parse(localStorage.getItem('mv_maintenance')||'[]'), location:localStorage.getItem('mv_location')||'Portugal', locationCoords:null, user:JSON.parse(localStorage.getItem('mv_user')||'null'), filters:{}};
@@ -331,6 +333,7 @@ function setSelectedLocation(label,coords){
   $('#locationLabel').textContent=label;
   $('#locationLabel').title=label;
   if(state.user)updateProfile();
+  window.dispatchEvent(new Event("mvLocationChanged"));
   closeModal();
 }
 
@@ -389,7 +392,8 @@ function openMapInSelectedZone(term){
   }
 }
 function searchAll(){let q=$('#homeSearch').value.trim();if(!q)return;go('explore');$('#exploreSearch').value=q;toast(`A procurar “${q}”`) }
-function setExplore(which,btn){$$('.chips .chip').forEach(c=>{if(c.parentElement===btn.parentElement)c.classList.remove('active')});btn.classList.add('active');['Motas','Oficinas','Stands','Pecas'].forEach(x=>$('#explore'+x).classList.add('hidden'));$('#explore'+({motas:'Motas',oficinas:'Oficinas',stands:'Stands',pecas:'Pecas'}[which])).classList.remove('hidden')}
+function openMotoDirectory(which){const chip=$('#explore [data-explore-tab=\"'+which+'\"]');if(chip)setExplore(which,chip);go('explore')}
+function setExplore(which,btn){$('#explore .search').hidden=which==='oficinas'||which==='stands';$$('.chips .chip').forEach(c=>{if(c.parentElement===btn.parentElement)c.classList.remove('active')});btn.classList.add('active');['Motas','Oficinas','Stands','Pecas'].forEach(x=>$('#explore'+x).classList.add('hidden'));$('#explore'+({motas:'Motas',oficinas:'Oficinas',stands:'Stands',pecas:'Pecas'}[which])).classList.remove('hidden')}
 const portugalLocations={
 "Aveiro":["Águeda","Albergaria-a-Velha","Anadia","Arouca","Aveiro","Castelo de Paiva","Espinho","Estarreja","Ílhavo","Mealhada","Murtosa","Oliveira de Azeméis","Oliveira do Bairro","Ovar","Santa Maria da Feira","São João da Madeira","Sever do Vouga","Vagos","Vale de Cambra"],
 "Beja":["Aljustrel","Almodôvar","Alvito","Barrancos","Beja","Castro Verde","Cuba","Ferreira do Alentejo","Mértola","Moura","Odemira","Ourique","Serpa","Vidigueira"],

@@ -399,7 +399,10 @@
         const days=dt?Math.floor((dt.getTime()-from.getTime())/86400000):100;
         ok=ok&&days>=0&&days<8&&(dt.getDay()===0||dt.getDay()===6);
       }else if(meetupFilter==='Passeios')ok=ok&&String(x.type||'').toLowerCase()==='passeio';
-      else if(meetupFilter==='Convívios')ok=ok&&String(x.type||'').toLowerCase()==='convívio';
+      else if(meetupFilter==='Cafezadas')ok=ok&&(x.category==='cafezada'||String(x.type||'').toLowerCase()==='convívio');
+      else if(meetupFilter==='Tours EN2')ok=ok&&x.category==='en2';
+      else if(meetupFilter==='Outros tours')ok=ok&&x.category==='tour';
+      else if(meetupFilter==='Trilhos')ok=ok&&x.category==='trilho';
       else if(meetupFilter==='Track Day')ok=ok&&String(x.type||'').toLowerCase()==='track day';
       el.style.display=ok?'':'none';if(ok)visible++;
     });
@@ -494,8 +497,6 @@
 
   function installServices(){
     const defs=[
-      ['#exploreOficinas','Oficinas de motas','Oficinas e manutenção na tua zona','oficina reparação de motas'],
-      ['#exploreStands','Concessionários','Descobrir concessionários de motas','concessionário de motas'],
       ['#explorePecas','Peças e acessórios','Procurar lojas de peças e equipamentos','loja peças acessórios de motas']
     ];
     defs.forEach(([selector,title,description,term])=>{

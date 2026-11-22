@@ -6,6 +6,8 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Insets;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.Uri;
@@ -48,6 +50,7 @@ import com.google.firebase.auth.UserProfileChangeRequest;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.SetOptions;
 
@@ -63,8 +66,11 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
@@ -73,6 +79,8 @@ public class MainActivity extends Activity {
     private static final int NOTIFICATION_PERMISSION_REQUEST = 1003;
     private static final int CSV_EXPORT_REQUEST = 1004;
     private static final int LOCATION_PERMISSION_REQUEST = 1005;
+    private static final int COMMUNITY_PERMISSION_REQUEST = 1006;
+    private static final String COMMUNITY_WORK = "motoverse_community_alerts";
     private static final String APP_PAGE = "file:///android_asset/index.html";
     private static final String ADMIN_EMAIL = "estriga85@gmail.com";
 
@@ -89,9 +97,14 @@ public class MainActivity extends Activity {
     private final List<CancellationSignal> locationSignals = new ArrayList<>();
     private boolean askingForLocationPermission;
     private int locationRequestId;
+    private ListenerRegistration communityFeed;
+    private FirebaseAuth.AuthStateListener authListener;
+    private String communityUid;
+    private String pendingCommunityMeetup;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        pendingCommunityMeetup = getIntent().getStringExtra("communityMeetupId");
         openAdminReviewOnReady = getIntent()!=null && getIntent().getBooleanExtra("openAdminReview", false);
         auth = FirebaseAuth.getInstance();
         db = FirebaseFirestore.getInstance();
@@ -137,7 +150,16 @@ public class MainActivity extends Activity {
                 startActivityForResult(Intent.createChooser(i,"Selecionar fotografias"),FILE_CHOOSER_REQUEST);return true;
             }
         });
-        auth.addAuthStateListener(a->{if(pageReady)pushAuthStateToWeb();});
+        authListener = a->{
+            FirebaseUser user = a.getCurrentUser();
+            String uid = user == null ? null : user.getUid();
+            if (!java.util.Objects.equals(uid, communityUid)) {
+                communityUid = uid;
+                refreshCommunityNotifications();
+            }
+            if(pageReady)pushAuthStateToWeb();
+        };
+        auth.addAuthStateListener(authListener);
         webView.loadUrl(APP_PAGE);
     }
 
@@ -161,6 +183,11 @@ public class MainActivity extends Activity {
 
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == COMMUNITY_PERMISSION_REQUEST) {
+            sendCommunityPreferences();
+            refreshCommunityNotifications();
+            return;
+        }
         if (requestCode != LOCATION_PERMISSION_REQUEST) return;
         askingForLocationPermission = false;
         if (hasLocationPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -207,6 +234,7 @@ public class MainActivity extends Activity {
 
     private void finishLocation(Location location, String error) {
         stopLocationRequest();
+        if (authListener != null) auth.removeAuthStateListener(authListener);
         if (isDestroyed() || !APP_PAGE.equals(webView.getUrl())) return;
         String result = location == null ? "null," + JSONObject.quote(error)
                 : "{lat:" + location.getLatitude() + ",lon:" + location.getLongitude() + "},null";
@@ -215,11 +243,69 @@ public class MainActivity extends Activity {
 
     @Override protected void onDestroy() {
         stopLocationRequest();
+        if (communityFeed != null) communityFeed.remove();
         super.onDestroy();
     }
 
+    private void refreshCommunityNotifications() {
+        if (communityFeed != null) { communityFeed.remove(); communityFeed = null; }
+        WorkManager work = WorkManager.getInstance(this);
+        String uid = communityUid;
+        JSONObject selection = uid == null ? new JSONObject() : CommunityNotifications.selection(this, uid);
+        Set<String> categories = new HashSet<>();
+        selection.keys().forEachRemaining(categories::add);
+        CommunityNotifications.syncTopics(categories);
+        if (categories.isEmpty()) {
+            work.cancelUniqueWork(COMMUNITY_WORK);
+            return;
+        }
+        communityFeed = CommunityNotifications.query(db).addSnapshotListener(this, (snapshot, error) -> {
+            if (snapshot == null || snapshot.getMetadata().isFromCache()) return;
+            for (DocumentSnapshot item : snapshot) CommunityNotifications.deliver(this, uid, item);
+            if (!snapshot.getDocumentChanges().isEmpty()) runJs("window.onCommunityLive&&window.onCommunityLive();");
+        });
+        Constraints constraints = new Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();
+        PeriodicWorkRequest refresh = new PeriodicWorkRequest.Builder(CommunityMeetupWorker.class, 15, TimeUnit.MINUTES)
+                .setConstraints(constraints).build();
+        work.enqueueUniquePeriodicWork(COMMUNITY_WORK, ExistingPeriodicWorkPolicy.KEEP, refresh);
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        if (communityUid != null) refreshCommunityNotifications();
+        if (pageReady) sendCommunityPreferences();
+    }
+
+    private void sendCommunityPreferences() {
+        FirebaseUser user = auth.getCurrentUser();
+        JSONObject selection = user == null ? new JSONObject() : CommunityNotifications.selection(this, user.getUid());
+        android.app.NotificationManager notifications = getSystemService(android.app.NotificationManager.class);
+        boolean allowed = notifications != null && notifications.areNotificationsEnabled();
+        runJs("window.onCommunityPreferences&&window.onCommunityPreferences(" + selection + "," + allowed + ");");
+    }
+
+    private void openPendingCommunityMeetup() {
+        if (!pageReady || pendingCommunityMeetup == null) return;
+        String meetup = pendingCommunityMeetup;
+        pendingCommunityMeetup = null;
+        runJs("window.mvOpenCommunityMeetup&&window.mvOpenCommunityMeetup(" + JSONObject.quote(meetup) + ");");
+    }
+
+    private void sendDirectoryLocation(int request, List<Address> matches) {
+        String result = "null";
+        if (matches != null) {
+            for (Address match : matches) {
+                if ("PT".equalsIgnoreCase(match.getCountryCode()) && match.hasLatitude() && match.hasLongitude()) {
+                    result = "{lat:" + match.getLatitude() + ",lon:" + match.getLongitude() + "}";
+                    break;
+                }
+            }
+        }
+        runJs("window.onDirectoryLocation&&window.onDirectoryLocation(" + request + "," + result + ");");
+    }
+
     private void applyMotoVerseFixes(){String js="(function(){var st=document.createElement('style');st.textContent='.modalWrap{padding-bottom:20px!important;box-sizing:border-box!important}.modal{max-height:calc(100dvh - 44px)!important;padding-bottom:36px!important}.photoThumb,.garagePhoto,.homeGaragePhoto{background-size:contain!important;background-position:center!important;background-repeat:no-repeat!important}';document.head.appendChild(st)})();";webView.evaluateJavascript(js,null);}
-    private void loadFirebaseBridge(){try(InputStream in=getAssets().open("firebase-bridge.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);String js=out.toString(StandardCharsets.UTF_8.name());webView.evaluateJavascript(js,v->{pageReady=true;pushAuthStateToWeb();});}catch(Exception e){pageReady=true;sendError("Não foi possível carregar a ligação à conta.");}}
+    private void loadFirebaseBridge(){try(InputStream in=getAssets().open("firebase-bridge.js");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[4096];int n;while((n=in.read(b))!=-1)out.write(b,0,n);String js=out.toString(StandardCharsets.UTF_8.name());webView.evaluateJavascript(js,v->{pageReady=true;pushAuthStateToWeb();openPendingCommunityMeetup();});}catch(Exception e){pageReady=true;sendError("Não foi possível carregar a ligação à conta.");}}
     private void runJs(String js){if(webView!=null)runOnUiThread(()->webView.evaluateJavascript(js,null));}
     private void sendError(String m){JSONObject o=new JSONObject();try{o.put("message",m==null?"Erro inesperado":m);}catch(Exception ignored){}runJs("window.onNativeError&&window.onNativeError("+o+");");}
     private void sendListingError(String message) {
@@ -388,6 +474,142 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void useDeviceLocation(int requestId) {
             runOnUiThread(() -> requestDeviceLocation(requestId));
         }
+
+        @JavascriptInterface public void resolveDirectoryLocation(int request, String place) {
+            if (place == null || place.trim().isEmpty() || place.length() > 140 || !Geocoder.isPresent()) {
+                sendDirectoryLocation(request, null);
+                return;
+            }
+            Geocoder geocoder = new Geocoder(MainActivity.this, new Locale("pt", "PT"));
+            String query = place.trim() + ", Portugal";
+            if (Build.VERSION.SDK_INT >= 33) {
+                geocoder.getFromLocationName(query, 4, new Geocoder.GeocodeListener() {
+                    @Override public void onGeocode(List<Address> addresses) { sendDirectoryLocation(request, addresses); }
+                    @Override public void onError(String error) { sendDirectoryLocation(request, null); }
+                });
+            } else {
+                new Thread(() -> {
+                    try { sendDirectoryLocation(request, geocoder.getFromLocationName(query, 4)); }
+                    catch (Exception error) { sendDirectoryLocation(request, null); }
+                }, "directory-geocoding").start();
+            }
+        }
+
+        @JavascriptInterface public void openWaze(String address, String coordinates) {
+            if (address == null || address.trim().isEmpty() || address.length() > 350) return;
+            Uri.Builder uri = Uri.parse("https://waze.com/ul").buildUpon();
+            if (coordinates != null && coordinates.matches("-?\\d{1,3}(\\.\\d+)?,\\s*-?\\d{1,3}(\\.\\d+)?")) {
+                uri.appendQueryParameter("ll", coordinates);
+            } else {
+                uri.appendQueryParameter("q", address);
+            }
+            Uri destination = uri.appendQueryParameter("navigate", "yes").appendQueryParameter("utm_source", "motoverse").build();
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, destination).setPackage("com.waze"));
+                } catch (ActivityNotFoundException noWaze) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, destination)); }
+                    catch (ActivityNotFoundException error) { sendError("Não foi possível abrir o Waze."); }
+                }
+            });
+        }
+
+        @JavascriptInterface public void openGoogleReviews(String business) {
+            if (business == null || business.trim().isEmpty() || business.length() > 350) return;
+            Uri destination = Uri.parse("https://www.google.com/maps/search/").buildUpon()
+                    .appendQueryParameter("api", "1").appendQueryParameter("query", business).build();
+            runOnUiThread(() -> {
+                try { startActivity(new Intent(Intent.ACTION_VIEW, destination)); }
+                catch (ActivityNotFoundException error) { sendError("Não foi possível abrir o Google Maps."); }
+            });
+        }
+
+        @JavascriptInterface public void openBusinessLink(String raw) {
+            if (raw == null || raw.length() > 600) return;
+            Uri uri = Uri.parse(raw);
+            String scheme = uri.getScheme();
+            if (!("https".equals(scheme) || "http".equals(scheme) || "tel".equals(scheme) || "mailto".equals(scheme))) return;
+            String action = "tel".equals(scheme) ? Intent.ACTION_DIAL : "mailto".equals(scheme) ? Intent.ACTION_SENDTO : Intent.ACTION_VIEW;
+            runOnUiThread(() -> {
+                try { startActivity(new Intent(action, uri)); }
+                catch (ActivityNotFoundException error) { sendError("Não foi possível abrir este contacto."); }
+            });
+        }
+
+        @JavascriptInterface public void loadDirectoryRating(int request, String query, String name, String coordinates) {
+            FirebaseUser user = auth.getCurrentUser();
+            if (user == null || query == null || name == null || query.length() > 350 || name.length() > 160
+                    || coordinates == null || coordinates.length() > 45) {
+                sendDirectoryRating(request, null);
+                return;
+            }
+            user.getIdToken(false).addOnSuccessListener(result -> new Thread(() -> {
+                JSONObject rating = null;
+                HttpURLConnection connection = null;
+                try {
+                    String project = com.google.firebase.FirebaseApp.getInstance().getOptions().getProjectId();
+                    if (project == null || !project.matches("[a-z0-9-]+")) throw new IllegalStateException();
+                    URL endpoint = new URL("https://europe-west1-" + project + ".cloudfunctions.net/directoryGoogleRating");
+                    connection = (HttpURLConnection) endpoint.openConnection();
+                    connection.setInstanceFollowRedirects(false);
+                    connection.setConnectTimeout(6000);
+                    connection.setReadTimeout(9000);
+                    connection.setRequestMethod("POST");
+                    connection.setRequestProperty("Authorization", "Bearer " + result.getToken());
+                    connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                    connection.setDoOutput(true);
+                    byte[] body = new JSONObject().put("query", query).put("name", name).put("coordinates", coordinates)
+                            .toString().getBytes(StandardCharsets.UTF_8);
+                    try (OutputStream output = connection.getOutputStream()) { output.write(body); }
+                    if (connection.getResponseCode() == 200) {
+                        try (InputStream input = connection.getInputStream()) {
+                            byte[] bytes = new byte[256];
+                            int length = input.read(bytes);
+                            ByteArrayOutputStream data = new ByteArrayOutputStream();
+                            while (length >= 0 && data.size() <= 1024) {
+                                data.write(bytes, 0, length);
+                                length = input.read(bytes);
+                            }
+                            if (length < 0) rating = new JSONObject(data.toString(StandardCharsets.UTF_8.name()));
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // The Google Maps link remains available when the rating service is unavailable.
+                } finally {
+                    if (connection != null) connection.disconnect();
+                }
+                sendDirectoryRating(request, rating);
+            }, "directory-google-rating").start()).addOnFailureListener(error -> sendDirectoryRating(request, null));
+        }
+
+        private void sendDirectoryRating(int request, JSONObject rating) {
+            runJs("window.onDirectoryRating&&window.onDirectoryRating(" + request + "," + rating + ");");
+        }
+
+        @JavascriptInterface public void getCommunityPreferences() { runOnUiThread(() -> sendCommunityPreferences()); }
+
+        @JavascriptInterface public void saveCommunityPreferences(String json) {
+            FirebaseUser user = auth.getCurrentUser();
+            if (user == null) return;
+            Set<String> enabled = new HashSet<>();
+            try {
+                JSONArray values = new JSONArray(json);
+                for (int i = 0; i < values.length(); i++) {
+                    String type = values.optString(i);
+                    if (CommunityNotifications.TYPES.contains(type)) enabled.add(type);
+                }
+            } catch (JSONException error) { sendError("Interesses inválidos."); return; }
+            runOnUiThread(() -> {
+                if (auth.getCurrentUser() == null || !user.getUid().equals(auth.getCurrentUser().getUid())) return;
+                CommunityNotifications.save(MainActivity.this, user.getUid(), enabled);
+                sendCommunityPreferences();
+                refreshCommunityNotifications();
+                if (!enabled.isEmpty() && Build.VERSION.SDK_INT >= 33
+                        && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, COMMUNITY_PERMISSION_REQUEST);
+                }
+            });
+        }
         private void openMapSearchAt(String query, String centre, String webQuery) {
             if(query==null||query.trim().isEmpty())return;
             runOnUiThread(()->{
@@ -466,7 +688,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent!=null&&intent.getBooleanExtra("openAdminReview",false)){openAdminReviewOnReady=true;if(pageReady){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u)){openAdminReviewOnReady=false;runJs("setTimeout(function(){window.openAdminReview&&window.openAdminReview();},200);");}}}}
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);if(intent!=null&&intent.hasExtra("communityMeetupId")){pendingCommunityMeetup=intent.getStringExtra("communityMeetupId");openPendingCommunityMeetup();}if(intent!=null&&intent.getBooleanExtra("openAdminReview",false)){openAdminReviewOnReady=true;if(pageReady){FirebaseUser u=auth.getCurrentUser();if(isAdmin(u)){openAdminReviewOnReady=false;runJs("setTimeout(function(){window.openAdminReview&&window.openAdminReview();},200);");}}}}
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){super.onActivityResult(requestCode,resultCode,data);if(requestCode==CSV_EXPORT_REQUEST){String csv=pendingExportCsv;pendingExportCsv=null;if(resultCode==Activity.RESULT_OK&&data!=null&&data.getData()!=null&&csv!=null){try(OutputStream out=getContentResolver().openOutputStream(data.getData())){if(out==null)throw new java.io.IOException("Ficheiro indisponível");out.write(csv.getBytes(StandardCharsets.UTF_8));runJs("window.onGarageCsvExported&&window.onGarageCsvExported();");}catch(Exception e){sendError("Não foi possível guardar o ficheiro CSV.");}}return;}if(requestCode==GOOGLE_SIGN_IN_REQUEST){Task<GoogleSignInAccount>task=GoogleSignIn.getSignedInAccountFromIntent(data);try{GoogleSignInAccount a=task.getResult(ApiException.class);if(a!=null&&a.getIdToken()!=null)firebaseGoogle(a.getIdToken());else sendError("Login Google cancelado.");}catch(ApiException e){if(e.getStatusCode()==10)sendError("Google ainda não está autorizado para a assinatura atual da MotoVerse. Falta atualizar o SHA-1 no Firebase.");else sendError("Não foi possível entrar com Google ("+e.getStatusCode()+").");}return;}if(requestCode!=FILE_CHOOSER_REQUEST||fileCallback==null)return;Uri[]r=null;if(resultCode==Activity.RESULT_OK&&data!=null){if(data.getClipData()!=null){int c=data.getClipData().getItemCount();r=new Uri[c];for(int i=0;i<c;i++)r[i]=data.getClipData().getItemAt(i).getUri();}else if(data.getData()!=null)r=new Uri[]{data.getData()};}fileCallback.onReceiveValue(r);fileCallback=null;}
     @Override public void onBackPressed(){if(webView!=null&&webView.canGoBack())webView.goBack();else super.onBackPressed();}
 }
