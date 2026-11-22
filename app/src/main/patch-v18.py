@@ -30,7 +30,7 @@ s = s.replace('private void sendPendingAlert(String listingId,FirebaseUser user)
 s = s.replace('body.put("listingId",listingId);body.put("idToken",token);',
 '''body.put("listingId",listingId);body.put("idToken",token);\n                    body.put("segredo","MV-ESTRIGA-2026-ALERT");\n                    body.put("id",listingId);\n                    body.put("marca",listing.get("brand"));\n                    body.put("modelo",listing.get("model"));\n                    body.put("ano",listing.get("year"));\n                    body.put("preco",listing.get("price"));\n                    body.put("localizacao",listing.get("location"));\n                    body.put("nome",user.getDisplayName()==null?"Motociclista":user.getDisplayName());\n                    body.put("email",user.getEmail()==null?"":user.getEmail());''')
 
-s = s.replace('sendPendingAlert(ref.getId(),u);','sendPendingAlert(ref.getId(),u,d);')
+s = s.replace('sendPendingAlert(ref.getId(), u);', 'sendPendingAlert(ref.getId(), u, listing);')
 
 s = re.sub(
     r'@JavascriptInterface public void saveGarage\(String json\)\{.*?\}\n        @JavascriptInterface public void loadGarage',
